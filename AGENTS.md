@@ -12,7 +12,7 @@ The audience is software engineering recruiters, other developers, and people wh
 
 A minimal, single-column site with one basketball story running from top to bottom:
 
-1. **Ticket.** A horizontal game ticket loads, gets stamped ADMITTED, and its stub tears off. It is brief and skippable (Skip button and Esc), and reduced-motion visitors skip it.
+1. **Ticket.** A horizontal digital game ticket loads. Its details (number, event, name, role, date, tip-off time, seat) decode from scrambled characters, the shot in its play diagram draws in, a scan line passes over the barcode, `✓ ADMITTED` decodes on the stub, and the stub tears off. It is brief and skippable (Skip button and Esc), and reduced-motion visitors skip it.
 2. **Court.** A small animated half court at the top of the page, four on four with the hoop on the left. Shawn is the only player with the ball; the other seven run. Later, clicking a player may trigger a screen, a cut or a dribble move.
 3. **The shot.** Scrolling winds Shawn up and releases the shot. The ball flies out of the court.
 4. **The rail.** The ball lands on a vertical node-and-line rail beside the sections and becomes an orange dot that travels down it, lighting each section.
@@ -42,7 +42,7 @@ Content (a short bio and two to four projects) should be written alongside the m
 
 ## How the prototype works
 
-- **Ticket.** `runTicket()` drives the load, stamp and tear timeline, and `finishTicket()` ends it. `fitTicket()` scales the ticket to fit the viewport.
+- **Ticket.** The ticket's wording lives in the `TICKET` object. The date and time are filled in live. `runTicket()` drives the load, decode, scan and tear timeline, and `finishTicket()` ends it. `fitTicket()` scales the ticket to fit the viewport. Each decoding field (`data-scr`) is split into fixed-width character boxes (`lockWidths()`) so scrambling never shifts the layout. `DECODE` sets when each field resolves, and serif fields scramble through similar-width letters.
 - **Court.** A 2D canvas with a simple 3/4 projection, `P(x, z, h)`, in feet. `x` runs from 0 (baseline, hoop side) to 47 (half-court line), `z` from 0 (far sideline) to 50 (near sideline), and `h` is height. The scene is drawn to a low-resolution offscreen canvas and scaled up to get the pixel size.
 - **Ball.** After the release, `ballAt(scroll)` is a pure function of scroll position with four phases:
   - `hand`: drawn by the court.

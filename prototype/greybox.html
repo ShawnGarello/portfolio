@@ -166,16 +166,23 @@
   .t-track { flex: 1; height: 1em; padding: .14em; border: .14em solid var(--charcoal); }
   .t-fill { display: block; width: 0; height: 100%; background: var(--orange); }
   .t-pct { min-width: 3.2em; text-align: right; }
-  .t-stamp {
-    position: absolute; right: 1.1em; top: 9.2em; padding: .25em .7em;
-    border: .25em solid var(--orange); color: var(--orange);
-    font-size: 1.5em; font-weight: 700; letter-spacing: .14em;
-    opacity: 0; transform: rotate(-12deg) scale(1.6);
-    transition: transform .16s cubic-bezier(.3,1.6,.5,1), opacity .12s;
-  }
-  .t-stamp.on { opacity: .92; transform: rotate(-12deg) scale(1); }
-  .t-barcode { display: flex; align-items: stretch; height: 3.6em; margin-top: auto; overflow: hidden; }
+  /* Digital text: each character is its own fixed-width box so scrambling never shifts the layout */
+  .ch { display: inline-block; text-align: center; white-space: pre; }
+  .ch.live { color: var(--orange); opacity: .8; }
+  .t-shot { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .t-shot-head { opacity: 0; transition: opacity .15s; }
+  .t-shot-head.on { opacity: 1; }
+  .t-status { margin-top: auto; font-size: 1.05em; font-weight: 700; letter-spacing: .14em; color: var(--orange); visibility: hidden; }
+  .t-status.on { visibility: visible; }
+  .t-barcode { position: relative; display: flex; align-items: stretch; height: 3.6em; margin-top: .7em; overflow: hidden; }
   .t-barcode b { display: block; flex: none; background: var(--charcoal); }
+  .t-scan { position: absolute; top: 0; bottom: 0; left: 0; width: .35em; background: var(--orange); box-shadow: 0 0 .9em .3em rgba(242,106,27,.5); opacity: 0; }
+  .ticket.scanning .t-scan { animation: scan .42s ease-in-out forwards; }
+  @keyframes scan {
+    0% { opacity: 1; transform: translateX(-.5em); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(11em); }
+  }
 
   .skip {
     position: absolute; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 8px;
@@ -266,14 +273,15 @@
 <div class="gate gone" id="gate">
   <div class="ticket" id="ticket" role="img" aria-label="Game ticket for Shawn Garello's portfolio">
     <div class="t-main">
-      <div class="t-meta"><span>ADMIT ONE</span><span>Nº 000023</span></div>
-      <div class="t-event"><span class="dia"></span>HOME COURT<i class="lead"></i>HALF COURT · 4 ON 4</div>
+      <div class="t-meta"><span>ADMIT ONE</span><span data-scr="number"></span></div>
+      <div class="t-event"><span class="dia"></span><span data-scr="event"></span><i class="lead"></i><span data-scr="format"></span></div>
       <div class="t-body">
         <div class="t-info">
-          <div class="t-name">Shawn Garello</div>
+          <div class="t-name" data-scr="name"></div>
           <div class="t-lines">
-            <div><span>DATE</span><i class="lead"></i><span id="tDate">—</span></div>
-            <div><span>TIP-OFF</span><i class="lead"></i><span id="tTime">—</span></div>
+            <div><span>ROLE</span><i class="lead"></i><span data-scr="role"></span></div>
+            <div><span>DATE</span><i class="lead"></i><span data-scr="date"></span></div>
+            <div><span>TIP-OFF</span><i class="lead"></i><span data-scr="time"></span></div>
           </div>
           <div class="t-load"><span>LOADING</span><span class="t-track"><span class="t-fill" id="tFill"></span></span><span class="t-pct" id="tPct">0%</span></div>
         </div>
@@ -289,21 +297,21 @@
             <path d="M60 23l5 5M65 23l-5 5M27 30l5 5M32 30l-5 5M21 74l5 5M26 74l-5 5M49 58l5 5M54 58l-5 5"/>
             <path d="M70 34Q66 50 56 52" stroke-dasharray="2 2.4"/>
             <circle cx="64" cy="68" r="4.2" stroke="#f26a1b" stroke-width="1.5"/>
-            <path class="t-shot" d="M61 64Q40 26 13 47" stroke="#f26a1b" stroke-width="1.5"/>
-            <path d="M13.5 42.5L12 47.5l5 .8" stroke="#f26a1b" stroke-width="1.5"/>
+            <path class="t-shot" id="tShot" pathLength="1" d="M61 64Q40 26 13 47" stroke="#f26a1b" stroke-width="1.5"/>
+            <path class="t-shot-head" id="tShotHead" d="M13.5 42.5L12 47.5l5 .8" stroke="#f26a1b" stroke-width="1.5"/>
           </svg>
         </div>
       </div>
-      <div class="t-stamp" id="tStamp">ADMITTED</div>
     </div>
     <div class="t-stub">
       <div class="t-stub-head">ADMIT ONE</div>
       <dl class="t-seat">
-        <div><dt>SEC</dt><i class="lead"></i><dd>01</dd></div>
-        <div><dt>ROW</dt><i class="lead"></i><dd>A</dd></div>
-        <div><dt>SEAT</dt><i class="lead"></i><dd>23</dd></div>
+        <div><dt>SEC</dt><i class="lead"></i><dd data-scr="sec"></dd></div>
+        <div><dt>ROW</dt><i class="lead"></i><dd data-scr="row"></dd></div>
+        <div><dt>SEAT</dt><i class="lead"></i><dd data-scr="seat"></dd></div>
       </dl>
-      <div class="t-barcode" id="tBarcode"></div>
+      <div class="t-status" id="tStatus"><span data-scr="status"></span></div>
+      <div class="t-barcode" id="tBarcode"><i class="t-scan"></i></div>
     </div>
   </div>
   <button class="skip" id="skip" type="button">SKIP <kbd>Esc</kbd></button>
@@ -342,7 +350,7 @@
     { key: 'courtH', label: 'Court height', min: 180, max: 520, step: 2, def: 348, unit: 'px' },
     { key: 'pixel', label: 'Pixel size (1 = smooth)', min: 1, max: 6, step: 1, def: 3, unit: '×' },
     { group: 'Ticket', key: 'ticketScale', label: 'Ticket size', min: 0.6, max: 1.5, step: 0.01, def: 1.05, unit: '×' },
-    { key: 'ticketMs', label: 'Ticket duration', min: 800, max: 5000, step: 100, def: 2200, unit: 'ms' },
+    { key: 'ticketMs', label: 'Ticket duration', min: 1200, max: 6000, step: 100, def: 2800, unit: 'ms' },
     { key: 'darkGate', label: 'Dark backdrop', type: 'bool', def: false },
     { key: 'holdTicket', label: 'Hold ticket on screen (compare sizes)', type: 'bool', def: false },
     { group: 'Shot', key: 'trigger', label: 'Shot happens after scrolling', min: 0, max: 600, step: 5, def: 140, unit: 'px' },
@@ -370,7 +378,11 @@
     }
     for (const d of DEFS) if (typeof saved[d.key] === typeof d.def) cfg[d.key] = saved[d.key];
   } catch { /* storage unavailable: use defaults */ }
-  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch { /* ignore */ } };
+  // Only values that differ from the defaults are stored, so changed defaults still reach returning viewers.
+  const save = () => {
+    const changed = Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v !== DEFAULTS[k]));
+    try { localStorage.setItem(STORE, JSON.stringify(changed)); } catch { /* ignore */ }
+  };
 
   // ---------- elements ----------
   const courtFrame = $('courtFrame');
@@ -922,24 +934,136 @@
   }
 
   // ---------- ticket ----------
-  const tFill = $('tFill'), tPct = $('tPct'), tStamp = $('tStamp');
+  // What the ticket says. Placeholder wording until the real copy is decided.
+  const TICKET = {
+    number: 'Nº 000023',
+    event: 'HOME COURT',
+    format: 'HALF COURT · 4 ON 4',
+    name: 'Shawn Garello',
+    role: 'SOFTWARE ENGINEER',
+    sec: '01',
+    row: 'A',
+    seat: '23',
+    status: '✓ ADMITTED',
+  };
+  // When each field decodes, as a share of the loading bar (0 → 1).
+  const DECODE = {
+    number: [0, 0.3], event: [0.05, 0.4], format: [0.1, 0.45], name: [0.12, 0.72],
+    role: [0.3, 0.8], date: [0.42, 0.86], time: [0.48, 0.9],
+    sec: [0.6, 0.94], row: [0.64, 0.96], seat: [0.68, 1], status: [0, 1],
+  };
+  const MAIN_FIELDS = Object.keys(DECODE).filter((k) => k !== 'status');
+
+  const tFill = $('tFill'), tPct = $('tPct'), tStatus = $('tStatus'), tShot = $('tShot'), tShotHead = $('tShotHead');
+
+  // ---- scramble ----
+  const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+=/<>';
+  // Serif fields aren't monospaced, so they draw stand-ins of a similar width to stay inside each box.
+  const SERIF_SETS = [
+    [/[iljtfr]/, 'iljtfr'],
+    [/[mw]/, 'mw'],
+    [/[a-z]/, 'abcdeghknopqsuvxyz'],
+    [/[IJ]/, 'IJ'],
+    [/[MW]/, 'MW'],
+    [/[A-Z]/, 'ABCDEFGHKLNOPRSTUVXYZ'],
+    [/[0-9]/, '0123456789'],
+  ];
+  const FIXED = /[\s·.:\-✓º]/;
+  const scr = {};
+  let glyphTick = 0;
+
+  function setScramble(host, text) {
+    host.textContent = '';
+    const chars = [...text].map((raw) => {
+      const ch = raw === ' ' ? ' ' : raw;
+      const el = document.createElement('span');
+      el.className = 'ch';
+      el.textContent = ch;
+      host.append(el);
+      return { el, ch, fixed: FIXED.test(raw), at: 0, shown: ch };
+    });
+    scr[host.dataset.scr] = { host, chars, serif: !!host.closest('.t-name, dd') };
+  }
+
+  // Freeze each character box at the width of its final letter.
+  function lockWidths() {
+    for (const f of Object.values(scr)) {
+      for (const c of f.chars) {
+        c.el.style.width = '';
+        c.el.textContent = c.ch;
+        const fs = parseFloat(getComputedStyle(c.el).fontSize);
+        c.el.style.width = (c.el.getBoundingClientRect().width / fs).toFixed(3) + 'em';
+      }
+    }
+  }
+
+  function planScramble() {
+    for (const [key, f] of Object.entries(scr)) {
+      const [a, b] = DECODE[key];
+      const n = f.chars.length;
+      f.chars.forEach((c, i) => { c.at = a + (b - a) * ((i + Math.random() * 0.9) / n); });
+    }
+  }
+
+  const randGlyph = (ch, serif) => {
+    const set = serif ? (SERIF_SETS.find(([re]) => re.test(ch)) || [, GLYPHS])[1] : GLYPHS;
+    return set[(Math.random() * set.length) | 0];
+  };
+
+  function renderScramble(keys, progress, now) {
+    const reroll = now - glyphTick > 55;
+    if (reroll) glyphTick = now;
+    for (const key of keys) {
+      const { chars, serif } = scr[key];
+      for (const c of chars) {
+        if (c.fixed || progress >= c.at) {
+          if (c.shown !== c.ch) { c.el.textContent = c.ch; c.el.classList.remove('live'); c.shown = c.ch; }
+        } else if (reroll || c.shown === c.ch) {
+          c.shown = randGlyph(c.ch, serif);
+          c.el.textContent = c.shown;
+          c.el.classList.add('live');
+        }
+      }
+    }
+  }
+
+  function fillTicket() {
+    const now = new Date();
+    const mon = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const data = {
+      ...TICKET,
+      date: `${now.getDate()} ${mon} ${now.getFullYear()}`,
+      time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toUpperCase(),
+    };
+    gate.querySelectorAll('[data-scr]').forEach((host) => setScramble(host, data[host.dataset.scr]));
+  }
+
+  // ---- barcode ----
+  const bars = [];
+  const finalBars = [];
   (function buildBarcode() {
     const el = $('tBarcode');
     let seed = 23;
     const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
     for (let i = 0; i < 56; i++) {
       const b = document.createElement('b');
-      b.style.width = (0.12 + rnd() * 0.32).toFixed(2) + 'em';
-      b.style.marginRight = (0.1 + rnd() * 0.22).toFixed(2) + 'em';
-      el.append(b);
+      finalBars.push([0.12 + rnd() * 0.32, 0.1 + rnd() * 0.22]);
+      el.prepend(b);
+      bars.push(b);
     }
+    setBars(false);
   })();
+  function setBars(random) {
+    bars.forEach((b, i) => {
+      const [w, m] = random ? [0.12 + Math.random() * 0.32, 0.1 + Math.random() * 0.22] : finalBars[i];
+      b.style.width = w.toFixed(2) + 'em';
+      b.style.marginRight = m.toFixed(2) + 'em';
+    });
+  }
 
-  function stampDate() {
-    const now = new Date();
-    const mon = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    $('tDate').textContent = `${now.getDate()} ${mon} ${now.getFullYear()}`;
-    $('tTime').textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toUpperCase();
+  function setShotDrawn(p) {
+    tShot.style.strokeDashoffset = (1 - p).toFixed(3);
+    tShotHead.classList.toggle('on', p >= 0.98);
   }
 
   function fitTicket() {
@@ -953,30 +1077,49 @@
   function resetTicket() {
     cancelAnimationFrame(ticketRaf);
     clearTimeout(gateTimer);
-    ticket.classList.remove('in', 'torn');
-    tStamp.classList.remove('on');
+    ticket.classList.remove('in', 'torn', 'scanning');
+    tStatus.classList.remove('on');
     tFill.style.width = '0%';
     tPct.textContent = '0%';
+    setShotDrawn(0);
+    setBars(false);
+  }
+
+  // Lay the ticket out with its final text, then measure.
+  function prepareTicket() {
+    fillTicket();
+    fitTicket();
+    lockWidths();
   }
 
   function runTicket() {
     resetTicket();
-    stampDate();
     gate.classList.remove('out', 'gone', 'hold');
     if (reduceMotion) { finishTicket(); return; }
     html.classList.add('locked');
-    fitTicket();
+    prepareTicket();
+    planScramble();
+    const t0 = performance.now();
+    renderScramble(MAIN_FIELDS, 0, t0);
     requestAnimationFrame(() => ticket.classList.add('in'));
     const D = cfg.ticketMs;
-    const t0 = performance.now();
-    let stamped = false, torn = false;
+    let lastBars = 0, scanning = false, torn = false;
     const tick = (now) => {
       const t = (now - t0) / D;
-      const load = smooth(0.1, 0.72, t);
+      const load = smooth(0.08, 0.7, t);
       tFill.style.width = (load * 100).toFixed(1) + '%';
       tPct.textContent = Math.round(load * 100) + '%';
-      if (t >= 0.76 && !stamped) { stamped = true; tStamp.classList.add('on'); }
-      if (t >= 0.86 && !torn) { torn = true; ticket.classList.add('torn'); }
+      renderScramble(MAIN_FIELDS, load, now);
+      setShotDrawn(smooth(0.3, 0.95, load));
+      if (load < 1 && now - lastBars > 90) { lastBars = now; setBars(true); }
+      if (t >= 0.74 && !scanning) {
+        scanning = true;
+        setBars(false);
+        ticket.classList.add('scanning');
+        tStatus.classList.add('on');
+      }
+      if (scanning) renderScramble(['status'], smooth(0.76, 0.86, t), now);
+      if (t >= 0.9 && !torn) { torn = true; ticket.classList.add('torn'); }
       if (t >= 1) { finishTicket(); return; }
       ticketRaf = requestAnimationFrame(tick);
     };
@@ -993,14 +1136,14 @@
   function setHold(on) {
     if (on) {
       resetTicket();
-      stampDate();
       html.classList.remove('locked');
       gate.classList.remove('out', 'gone');
       gate.classList.add('hold');
-      fitTicket();
+      prepareTicket();
       ticket.classList.add('in');
       tFill.style.width = '64%';
       tPct.textContent = '64%';
+      setShotDrawn(0.64);
     } else if (gate.classList.contains('hold')) {
       gate.classList.remove('hold');
       gate.classList.add('out', 'gone');
@@ -1025,7 +1168,7 @@
     gate.classList.toggle('dark', cfg.darkGate);
     if (!cfg.holdTicket) setHold(false);
     else if (!gate.classList.contains('hold')) setHold(true);
-    else fitTicket();
+    else { fitTicket(); lockWidths(); }
     dirty = true;
   }
 
