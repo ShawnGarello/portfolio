@@ -46,7 +46,7 @@ Content (a short bio and two to four projects) should be written alongside the m
 - **Court.** A 2D canvas with a simple 3/4 projection, `P(x, z, h)`, in feet. `x` runs from 0 (baseline, hoop side) to 47 (half-court line), `z` from 0 (far sideline) to 50 (near sideline), and `h` is height. The scene is drawn to a low-resolution offscreen canvas and scaled up to get the pixel size.
 - **Ball.** After the release, `ballAt(scroll)` is a pure function of scroll position with four phases:
   - `hand`: drawn by the court.
-  - `flight`: a screen-space arc from the release point to the rail.
+  - `flight`: a screen-space curve (`flightPoint`) from the release point that swings wide through the left margin and comes in to the rail from outside. The ball must never pass over text. `measure()` samples the flight and the readout warns if it does, and phones use a wider swing that briefly takes the ball off-screen.
   - `rail`: the dot sits at the anchor line, clamped to the rail.
   - `drop`: a page-space path into the hoop.
 

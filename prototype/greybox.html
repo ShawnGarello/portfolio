@@ -356,7 +356,8 @@
     { group: 'Shot', key: 'trigger', label: 'Shot happens after scrolling', min: 0, max: 600, step: 5, def: 140, unit: 'px' },
     { key: 'windup', label: 'Wind-up length', min: 0, max: 300, step: 5, def: 90, unit: 'px' },
     { key: 'gap', label: 'Air gap before sections', min: 0, max: 900, step: 10, def: 300, unit: 'px' },
-    { key: 'arc', label: 'Arc height', min: 0, max: 450, step: 5, def: 170, unit: 'px' },
+    { key: 'arc', label: 'Arc height', min: 0, max: 300, step: 5, def: 110, unit: 'px' },
+    { key: 'swing', label: 'Swing out to the left', min: 0, max: 400, step: 5, def: 150, unit: 'px' },
     { key: 'bump', label: 'Ball grows mid-air by', min: 0, max: 24, step: 1, def: 8, unit: 'px' },
     { group: 'Rail', key: 'anchor', label: 'Dot rides at', min: 15, max: 75, step: 1, def: 45, unit: '% down' },
     { key: 'railOffset', label: 'Rail distance from text', min: 16, max: 120, step: 2, def: 56, unit: 'px' },
@@ -387,6 +388,7 @@
   // ---------- elements ----------
   const courtFrame = $('courtFrame');
   const timeline = $('timeline');
+  const bioEl = document.querySelector('.bio');
   const nodeEls = [...timeline.querySelectorAll('[data-node]')];
   const dropAir = $('dropAir');
   const hoopSlot = $('hoopSlot');
@@ -404,6 +406,24 @@
 
   const railDotY = (s) => clamp(L.anchorY, L.railTop - s, L.railBot - s);
 
+  const bez = (a, b, c, d, t) => {
+    const u = 1 - t;
+    return {
+      x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x,
+      y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y,
+    };
+  };
+  // The shot in screen space: up and left out of the court, wide through the left margin,
+  // then in to the rail from outside so it never crosses the text column.
+  // On phones there is no margin, so the swing is wider and the ball briefly leaves the screen.
+  function flightPoint(p) {
+    const { S, R } = L;
+    const swing = cfg.swing * (L.narrow ? 1.8 : 1);
+    const c1 = { x: lerp(S.x, R.x, 0.2), y: Math.max(S.y - cfg.arc * 1.6, -20) };
+    const c2 = { x: R.x - swing, y: Math.max(Math.min(S.y, R.y) - cfg.arc, 30) };
+    return bez(S, c1, c2, R, p);
+  }
+
   function hoopGeom(cx, top) {
     const bb = { x: cx - 50, y: top + 8, w: 100, h: 66 };
     const rimY = bb.y + bb.h - 4;
@@ -417,7 +437,8 @@
     L.court = { x: cr.left, y: cr.top + sy, w: cr.width, h: cr.height };
     const tl = timeline.getBoundingClientRect();
     const padL = parseFloat(getComputedStyle(timeline).paddingLeft) || 0;
-    L.railX = padL > 0 ? tl.left + 11 : Math.max(12, tl.left - cfg.railOffset);
+    L.narrow = padL > 0;
+    L.railX = L.narrow ? tl.left + 11 : Math.max(12, tl.left - cfg.railOffset);
     L.nodes = nodeEls.map((el) => { const r = el.getBoundingClientRect(); return r.top + sy + r.height / 2; });
     L.railTop = L.nodes[0];
     L.railBot = L.nodes[L.nodes.length - 1];
@@ -435,6 +456,21 @@
     L.release = court.releasePoint(L.court.w, L.court.h);
     L.S = { x: L.court.x + L.release.x, y: L.court.y + L.release.y - L.shotStart };
     L.R = { x: L.railX, y: railDotY(L.shotEnd) };
+
+    // Does the ball pass over any text during its flight?
+    const textBoxes = [bioEl, timeline].map((el) => {
+      const r = el.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+      return { l: r.left + pad, r: r.right, t: r.top + sy, b: r.bottom + sy };
+    });
+    L.crossesText = false;
+    for (let i = 1; i < 80 && !L.crossesText; i++) {
+      const p = i / 80;
+      const pt = flightPoint(p);
+      const docY = pt.y + L.shotStart + p * (L.shotEnd - L.shotStart);
+      const r = cfg.dot / 2 + cfg.bump / 2;
+      L.crossesText = textBoxes.some((b) => pt.x + r > b.l && pt.x - r < b.r && docY + r > b.t && docY - r < b.b);
+    }
   }
 
   // Size the two spacers so the drop always has room and the page can scroll far enough.
@@ -465,10 +501,11 @@
     const dotR = cfg.dot / 2;
     if (s < L.shotEnd) {
       const p = (s - L.shotStart) / (L.shotEnd - L.shotStart);
+      const pt = flightPoint(p);
       return {
         phase: 'flight', p,
-        x: lerp(L.S.x, L.R.x, p),
-        y: lerp(L.S.y, L.R.y, p) - 4 * cfg.arc * p * (1 - p),
+        x: pt.x,
+        y: pt.y,
         r: lerp(L.release.r, dotR, p) + (cfg.bump / 2) * Math.sin(Math.PI * p),
       };
     }
@@ -887,12 +924,10 @@
 
     // flight path preview (screen-space, so it stays put while scrolling)
     if (s >= L.shotStart && s < L.shotEnd + 40) {
-      g.fillStyle = 'rgba(0,0,0,.2)';
-      for (let i = 0; i <= 40; i++) {
-        const p = i / 40;
-        const x = lerp(L.S.x, L.R.x, p);
-        const y = lerp(L.S.y, L.R.y, p) - 4 * cfg.arc * p * (1 - p);
-        g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = L.crossesText ? 'rgba(194,65,12,.45)' : 'rgba(0,0,0,.2)';
+      for (let i = 0; i <= 48; i++) {
+        const pt = flightPoint(i / 48);
+        g.beginPath(); g.arc(pt.x, pt.y, 1.4, 0, Math.PI * 2); g.fill();
       }
     }
     // drop path preview (page-space)
@@ -924,6 +959,7 @@
     ];
     const warn = [];
     if (L.railTop - L.anchorY < L.shotStart + 120) warn.push('Air gap is short: the ball reaches the rail almost right away.');
+    if (L.crossesText) warn.push('The ball passes over text: widen the swing or raise the arc.');
     if (L.windStart < 0) warn.push('Wind-up starts before any scrolling.');
     const text = lines.join('\n') + (warn.length ? '\n' + warn.map((w) => '⚠ ' + w).join('\n') : '');
     if (text !== hudText) {
