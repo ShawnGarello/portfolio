@@ -155,20 +155,12 @@
   .lead { flex: 1; min-width: 1em; border-bottom: .2em dotted rgba(35,35,35,.45); }
   .t-body { display: grid; grid-template-columns: 1fr 10.5em; align-items: end; gap: 2.2em; margin-top: 1.4em; }
   .t-name { margin: 0 0 .45em; font: 4em/1 var(--serif); letter-spacing: -.02em; white-space: nowrap; }
-  .t-art {
-    position: relative; display: grid; place-items: center; height: 10.5em;
-    background: radial-gradient(circle, rgba(35,35,35,.2) .08em, transparent .1em) 0 0 / .9em .9em;
-  }
-  .t-art svg { width: 7.8em; height: 7.8em; overflow: visible; }
+  .t-art { height: 10.5em; padding: .5em; border: .14em solid var(--charcoal); border-radius: .5em; }
+  .t-art svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .t-stub-head { font-size: 1.05em; letter-spacing: .12em; }
   .t-seat { margin: 1.2em 0 1.4em; }
   .t-seat > div { display: flex; align-items: baseline; gap: .6em; margin: .35em 0; font-size: 1.05em; letter-spacing: .08em; }
   .t-seat dd { margin: 0; font: 1.8em/1.1 var(--serif); letter-spacing: 0; }
-  .br { position: absolute; width: 1.2em; height: 1.2em; border: 0 solid var(--charcoal); }
-  .br.tl { left: 0; top: 0; border-width: .16em 0 0 .16em; }
-  .br.tr { right: 0; top: 0; border-width: .16em .16em 0 0; }
-  .br.bl { left: 0; bottom: 0; border-width: 0 0 .16em .16em; }
-  .br.brr { right: 0; bottom: 0; border-width: 0 .16em .16em 0; }
   .t-lines > div { display: flex; align-items: baseline; gap: .8em; margin: .55em 0; font-size: 1.05em; letter-spacing: .08em; }
   .t-load { display: flex; align-items: center; gap: .8em; margin-top: 1.6em; font-size: 1.05em; letter-spacing: .12em; }
   .t-track { flex: 1; height: 1em; padding: .14em; border: .14em solid var(--charcoal); }
@@ -286,11 +278,19 @@
           <div class="t-load"><span>LOADING</span><span class="t-track"><span class="t-fill" id="tFill"></span></span><span class="t-pct" id="tPct">0%</span></div>
         </div>
         <div class="t-art">
-          <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
-          <svg viewBox="0 0 100 100" fill="none" stroke="#232323" stroke-width="1.6">
-            <circle cx="50" cy="50" r="42"/>
-            <path d="M50 8v84M8 50h84"/>
-            <path d="M22 19c13 9 13 53 0 62M78 19c-13 9-13 53 0 62"/>
+          <!-- Play diagram: half court seen from above, hoop on the left, the shot drawn in orange -->
+          <svg viewBox="0 0 100 100" fill="none" stroke="#232323" stroke-width="1.1" stroke-linecap="round">
+            <path d="M3 6H97V94H3Z" stroke-width=".9"/>
+            <path d="M3 35H31V65H3M31 41A9 9 0 0 1 31 59" stroke-width=".9"/>
+            <path d="M3 12H21A39 39 0 0 1 21 88H3" stroke-width=".9"/>
+            <path d="M6 45V55"/>
+            <circle cx="9.5" cy="50" r="2.4" stroke="#f26a1b"/>
+            <circle cx="70" cy="30" r="4"/><circle cx="34" cy="24" r="4"/><circle cx="18" cy="84" r="4"/>
+            <path d="M60 23l5 5M65 23l-5 5M27 30l5 5M32 30l-5 5M21 74l5 5M26 74l-5 5M49 58l5 5M54 58l-5 5"/>
+            <path d="M70 34Q66 50 56 52" stroke-dasharray="2 2.4"/>
+            <circle cx="64" cy="68" r="4.2" stroke="#f26a1b" stroke-width="1.5"/>
+            <path class="t-shot" d="M61 64Q40 26 13 47" stroke="#f26a1b" stroke-width="1.5"/>
+            <path d="M13.5 42.5L12 47.5l5 .8" stroke="#f26a1b" stroke-width="1.5"/>
           </svg>
         </div>
       </div>
