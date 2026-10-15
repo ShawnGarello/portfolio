@@ -16,7 +16,7 @@ A minimal, single-column site with one basketball story running from top to bott
 2. **Court.** A small animated half court at the top of the page, four on four with the hoop on the left. Shawn is the only player with the ball; the other seven run. Later, clicking a player may trigger a screen, a cut or a dribble move.
 3. **The shot.** Scrolling winds Shawn up and releases the shot. The ball flies out of the court.
 4. **The rail.** The ball lands on a vertical node-and-line rail beside the sections and becomes an orange dot that travels down it, lighting each section.
-5. **The finish.** Past the last node, the dot grows back into a ball and drops through a hoop above the footer and contact links.
+5. **The finish.** A side-view hoop hangs directly under the rail's last node. When the dot reaches that node, it grows back into a ball and falls straight through the hoop with real gravity, bounces, and rolls to a rest on the footer floor.
 
 Design direction: quiet, small and handmade, with one memorable moment rather than effects everywhere. The layout uses a narrow centered column (about 380px of text, 15px type) with the court above it at about 522x348. Final art is planned as pixel art.
 
@@ -44,14 +44,14 @@ Content (a short bio and two to four projects) should be written alongside the m
 
 - **Ticket.** The ticket's wording lives in the `TICKET` object. The date and time are filled in live. `runTicket()` drives the load, decode, scan and tear timeline, and `finishTicket()` ends it. `fitTicket()` scales the ticket to fit the viewport. Each decoding field (`data-scr`) is split into fixed-width character boxes (`lockWidths()`) so scrambling never shifts the layout. `DECODE` sets when each field resolves, and serif fields scramble through similar-width letters.
 - **Court.** A 2D canvas with a simple 3/4 projection, `P(x, z, h)`, in feet. `x` runs from 0 (baseline, hoop side) to 47 (half-court line), `z` from 0 (far sideline) to 50 (near sideline), and `h` is height. The scene is drawn to a low-resolution offscreen canvas and scaled up to get the pixel size.
-- **Ball.** After the release, `ballAt(scroll)` is a pure function of scroll position with four phases:
+- **Ball.** From the release to the last node, `ballAt(scroll)` is a pure function of scroll position. After that, the ball runs on time-based physics. The phases are:
   - `hand`: drawn by the court.
   - `flight`: a screen-space curve (`flightPoint`) from the release point that swings wide through the left margin and comes in to the rail from outside. The ball must never pass over text. `measure()` samples the flight and the readout warns if it does, and phones use a wider swing that briefly takes the ball off-screen.
   - `rail`: the dot sits at the anchor line, clamped to the rail.
-  - `drop`: a page-space path into the hoop.
+  - `free`: once scrolling reaches `L.railEnd`, `updateFreeBall()` hands the ball to physics in page space (`stepBall()`): gravity, the rim ends and backboard as colliders, a damping net, a floor bounce, rolling friction and screen-edge walls. Scrolling back above the last node returns it to the rail. Arriving at the bottom without scrolling through, such as after a reload, places the ball already at rest.
 
-  Keep it this way: scrolling up must rewind everything exactly.
-- **Layout.** `measure()` caches page positions. `fitSpacers()` sizes the space above and below the hoop so the drop always has room.
+  Keep the scroll-driven part exactly reversible.
+- **Layout.** `measure()` caches page positions. `railDotDocY()` eases the dot onto the last node when the page is too short for that node to reach the dot line. `fitYard()` sizes the space under the last section so the footer floor sits a fixed distance below the rim.
 - **Tune panel.** Every adjustable value lives in `DEFS` with a label, range and default. Settings persist in `localStorage` under `court-greybox:v2`. Bump the key, and migrate what still applies, whenever the meaning of a value changes.
 
 ## Checking changes

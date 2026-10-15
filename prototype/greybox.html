@@ -65,7 +65,9 @@
   .bio strong { color: var(--ink); font-weight: 500; }
 
   .air { position: relative; height: var(--gap-h); }
-  .drop-air { position: relative; height: 200px; }
+  .yard { position: relative; height: 240px; }
+  .yard .guide-label { top: 30%; }
+  .tail { height: 40px; }
 
   .timeline { position: relative; }
   .sec { padding-bottom: 76px; }
@@ -81,8 +83,7 @@
   .row strong { color: var(--ink); font-weight: 500; }
   .row span:last-child { font: 12px var(--mono); color: var(--faint); white-space: nowrap; }
 
-  .hoop-slot { height: 160px; }
-  .signoff { display: flex; justify-content: space-between; padding-top: 18px; font-size: 13px; }
+  .signoff { display: flex; justify-content: space-between; padding-top: 14px; font-size: 13px; }
 
   .guide-label {
     display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -261,10 +262,9 @@
     </section>
   </div>
 
-  <div class="drop-air" id="dropAir"><span class="guide-label">drop · the dot becomes the ball again</span></div>
-  <div class="hoop-slot" id="hoopSlot" aria-hidden="true"></div>
+  <div class="yard" id="yard"><span class="guide-label">the dot drops through the hoop onto the floor</span></div>
   <footer class="col signoff"><span>© 2026 Shawn Garello</span><span>sign-off line</span></footer>
-  <div id="tailPad" style="height:40px"></div>
+  <div class="tail"></div>
 </main>
 
 <canvas id="overlay" aria-hidden="true"></canvas>
@@ -362,8 +362,8 @@
     { group: 'Rail', key: 'anchor', label: 'Dot rides at', min: 15, max: 75, step: 1, def: 45, unit: '% down' },
     { key: 'railOffset', label: 'Rail distance from text', min: 16, max: 120, step: 2, def: 56, unit: 'px' },
     { key: 'dot', label: 'Dot size', min: 6, max: 20, step: 1, def: 10, unit: 'px' },
-    { group: 'Finish', key: 'hoopCenter', label: 'Hoop centered (off = under the rail)', type: 'bool', def: true },
-    { key: 'dropArc', label: 'Drop arc height', min: 0, max: 240, step: 5, def: 90, unit: 'px' },
+    { group: 'Finish', key: 'hoopDrop', label: 'Hoop below the last node', min: 60, max: 300, step: 5, def: 130, unit: 'px' },
+    { key: 'endBall', label: 'Ball size on the floor', min: 14, max: 34, step: 1, def: 22, unit: 'px' },
     { group: 'Debug', key: 'players', label: 'Players running', type: 'bool', def: true },
     { key: 'debug', label: 'Show guides + readout', type: 'bool', def: true },
   ];
@@ -390,9 +390,7 @@
   const timeline = $('timeline');
   const bioEl = document.querySelector('.bio');
   const nodeEls = [...timeline.querySelectorAll('[data-node]')];
-  const dropAir = $('dropAir');
-  const hoopSlot = $('hoopSlot');
-  const tailPad = $('tailPad');
+  const yard = $('yard');
   const overlay = $('overlay');
   const octx = overlay.getContext('2d');
   const hud = $('hud');
@@ -402,9 +400,16 @@
   // ---------- layout cache ----------
   const L = { nodes: [] };
   let dirty = true;
-  const DROP_MIN = 260; // minimum scroll distance for the final drop
+  const FLOOR_BELOW_RIM = 110; // rim to footer floor
 
-  const railDotY = (s) => clamp(L.anchorY, L.railTop - s, L.railBot - s);
+  // The dot rides the anchor line. If the page can't scroll far enough for the last node to
+  // reach that line, the dot eases onto the last node over the final stretch instead.
+  function railDotDocY(s) {
+    let y = clamp(s + L.anchorY, L.railTop, L.railBot);
+    if (L.railBot - L.anchorY > L.railEnd) y = lerp(y, L.railBot, smooth(L.railEnd - 400, L.railEnd, s));
+    return clamp(y, L.railTop, L.railBot);
+  }
+  const railDotY = (s) => railDotDocY(s) - s;
 
   const bez = (a, b, c, d, t) => {
     const u = 1 - t;
@@ -424,10 +429,11 @@
     return bez(S, c1, c2, R, p);
   }
 
-  function hoopGeom(cx, top) {
-    const bb = { x: cx - 50, y: top + 8, w: 100, h: 66 };
-    const rimY = bb.y + bb.h - 4;
-    return { cx, bb, rimY, rx: 27, ry: 6.5, netH: 44, ballR: 14, floorY: rimY + 44 + 34 };
+  // Side-view hoop: backboard on the left, rim reaching right, centred under the rail.
+  function hoopGeom(rimX, rimY, ballR) {
+    const half = ballR * 1.9;
+    const bbX = rimX - half - 5;
+    return { rimX, rimY, half, bbX, bbTop: rimY - 58, bbBot: rimY + 8, netH: ballR * 3, poleX: bbX - 12 };
   }
 
   function measure() {
@@ -444,15 +450,15 @@
     L.railBot = L.nodes[L.nodes.length - 1];
     L.vh = vh;
     L.anchorY = vh * cfg.anchor / 100;
-    const hs = hoopSlot.getBoundingClientRect();
-    L.hoop = hoopGeom(cfg.hoopCenter ? hs.left + hs.width / 2 : L.railX, hs.top + sy);
+    L.ballR = cfg.endBall / 2;
+    L.hoop = hoopGeom(L.railX, L.railBot + cfg.hoopDrop, L.ballR);
+    L.floorY = yard.getBoundingClientRect().bottom + sy;
     L.shotStart = cfg.trigger;
     L.windStart = cfg.trigger - cfg.windup;
-    L.shotEnd = Math.max(L.railTop - L.anchorY, L.shotStart + 40);
-    L.dropStart = L.railBot - L.anchorY;
-    L.finishY = vh * 0.66;                 // where the rim sits on screen when the ball goes in
-    L.dropEnd = L.hoop.rimY - L.finishY;
     L.maxScroll = html.scrollHeight - vh;
+    L.shotEnd = Math.max(L.railTop - L.anchorY, L.shotStart + 40);
+    // scroll position where the dot reaches the last node and drops
+    L.railEnd = Math.max(L.shotEnd + 1, Math.min(L.railBot - L.anchorY, L.maxScroll - 2));
     L.release = court.releasePoint(L.court.w, L.court.h);
     L.S = { x: L.court.x + L.release.x, y: L.court.y + L.release.y - L.shotStart };
     L.R = { x: L.railX, y: railDotY(L.shotEnd) };
@@ -473,25 +479,17 @@
     }
   }
 
-  // Size the two spacers so the drop always has room and the page can scroll far enough.
-  function fitSpacers() {
-    const airNow = dropAir.offsetHeight;
-    const padNow = tailPad.offsetHeight;
-    const d0 = (L.hoop.rimY - L.railBot) - airNow;
-    const air = Math.max(60, Math.ceil(DROP_MIN + L.finishY - L.anchorY - d0));
-    const tail0 = (html.scrollHeight - L.hoop.rimY) - padNow;
-    const pad = Math.max(24, Math.ceil(L.vh - L.finishY - tail0 + 4));
-    if (Math.abs(air - airNow) > 1 || Math.abs(pad - padNow) > 1) {
-      dropAir.style.height = air + 'px';
-      tailPad.style.height = pad + 'px';
-      return true;
-    }
+  // Size the yard so the footer floor sits a fixed distance below the rim.
+  function fitYard() {
+    const top = yard.getBoundingClientRect().top + scrollY;
+    const h = Math.max(60, Math.round(L.hoop.rimY + FLOOR_BELOW_RIM - top));
+    if (Math.abs(h - yard.offsetHeight) > 1) { yard.style.height = h + 'px'; return true; }
     return false;
   }
 
   function relayout() {
     measure();
-    if (fitSpacers()) measure();
+    if (fitYard()) measure();
     dirty = false;
   }
 
@@ -509,26 +507,79 @@
         r: lerp(L.release.r, dotR, p) + (cfg.bump / 2) * Math.sin(Math.PI * p),
       };
     }
-    if (s < L.dropStart) {
-      return { phase: 'rail', p: (s - L.shotEnd) / Math.max(1, L.dropStart - L.shotEnd), x: L.railX, y: railDotY(s), r: dotR };
+    return { phase: 'rail', x: L.railX, y: railDotY(Math.min(s, L.railEnd)), r: dotR };
+  }
+
+  // ---------- the ball on the floor: real physics once the dot leaves the last node ----------
+  const GRAVITY = 2200; // px/s²
+  const B = { mode: 'path', x: 0, y: 0, vx: 0, vy: 0, r: 5, spin: 0, net: 0, nudge: false, grounded: false };
+  let prevScroll = null;
+
+  function updateFreeBall(s, dt) {
+    const inEnd = B.mode === 'free' ? s >= L.railEnd - 24 : s >= L.railEnd;
+    if (!inEnd) { B.mode = 'path'; return null; }
+    if (B.mode !== 'free') {
+      B.mode = 'free';
+      const dropping = prevScroll !== null && prevScroll < L.railEnd && !reduceMotion;
+      if (dropping) {
+        // scrolled onto the last node: fall from it, straight through the hoop
+        Object.assign(B, { x: L.railX, y: L.railBot, vx: 0, vy: 0, r: cfg.dot / 2, nudge: true });
+      } else {
+        // arrived at the bottom some other way: already resting on the floor
+        Object.assign(B, { x: L.railX + L.hoop.half + 110, y: L.floorY - L.ballR, vx: 0, vy: 0, r: L.ballR, nudge: false });
+      }
     }
+    stepBall(dt);
+    return { phase: 'free', x: B.x, y: B.y - s, r: B.r, spin: B.spin };
+  }
+
+  function stepBall(dt) {
+    B.r = Math.min(L.ballR, B.r + dt * 70); // the dot grows back into the ball
+    const n = 4, h = dt / n;
+    for (let i = 0; i < n; i++) {
+      const prevY = B.y;
+      B.vy += GRAVITY * h;
+      B.x += B.vx * h;
+      B.y += B.vy * h;
+      collideHoop(prevY);
+      if (B.y + B.r > L.floorY) {
+        B.y = L.floorY - B.r;
+        if (B.vy > 0) {
+          B.vy = B.vy > 90 ? -B.vy * 0.52 : 0;
+          B.vx *= 0.92;
+          if (B.nudge) { B.vx += 300; B.nudge = false; } // roll out from under the hoop
+        }
+      }
+      if (B.x < B.r) { B.x = B.r; B.vx = Math.abs(B.vx) * 0.6; }
+      if (B.x > innerWidth - B.r) { B.x = innerWidth - B.r; B.vx = -Math.abs(B.vx) * 0.6; }
+    }
+    B.grounded = B.vy === 0 && B.y + B.r >= L.floorY - 0.5;
+    if (B.grounded) { B.vx *= Math.exp(-2.4 * dt); if (Math.abs(B.vx) < 3) B.vx = 0; }
+    B.spin += (B.vx * dt) / Math.max(1, B.r);
+    B.net = Math.max(0, B.net - dt * 2.2);
+  }
+
+  function collidePoint(px, py, pr) {
+    const dx = B.x - px, dy = B.y - py;
+    const d = Math.hypot(dx, dy), min = B.r + pr;
+    if (d >= min || d < 1e-4) return;
+    const nx = dx / d, ny = dy / d;
+    B.x = px + nx * min;
+    B.y = py + ny * min;
+    const vn = B.vx * nx + B.vy * ny;
+    if (vn < 0) { B.vx -= 1.55 * vn * nx; B.vy -= 1.55 * vn * ny; }
+  }
+
+  function collideHoop(prevY) {
     const h = L.hoop;
-    const q = clamp((s - L.dropStart) / Math.max(1, L.dropEnd - L.dropStart), 0, 1);
-    const entry = { x: h.cx, y: h.rimY - h.ballR * 0.5 };
-    let x, y, r, swish = 0;
-    if (q < 0.75) {
-      const u = q / 0.75;
-      x = lerp(L.railX, entry.x, u);
-      y = lerp(L.railBot, entry.y, u) - 4 * cfg.dropArc * u * (1 - u);
-      r = lerp(dotR, h.ballR, smooth(0, 0.55, u));
-    } else {
-      const u = (q - 0.75) / 0.25;
-      x = entry.x;
-      y = lerp(entry.y, h.floorY - h.ballR, easeIn(u));
-      r = h.ballR;
-      swish = Math.sin(Math.PI * clamp(u * 1.6, 0, 1));
+    collidePoint(h.rimX - h.half, h.rimY, 2.5);
+    collidePoint(h.rimX + h.half, h.rimY, 2.5);
+    if (B.y + B.r > h.bbTop && B.y - B.r < h.bbBot && B.x - B.r < h.bbX && B.x + B.r > h.bbX - 4) {
+      if (B.x >= h.bbX - 2) { B.x = h.bbX + B.r; B.vx = Math.abs(B.vx) * 0.55; }
+      else { B.x = h.bbX - 4 - B.r; B.vx = -Math.abs(B.vx) * 0.55; }
     }
-    return { phase: 'drop', p: q, x, y: y - s, r, swish };
+    if (prevY < h.rimY && B.y >= h.rimY && B.vy > 0 && Math.abs(B.x - h.rimX) < h.half - 1) B.net = 1;
+    if (B.y > h.rimY && B.y < h.rimY + h.netH && Math.abs(B.x - h.rimX) < h.half) { B.vx *= 0.97; B.vy *= 0.985; }
   }
 
   // ---------- court ----------
@@ -801,61 +852,79 @@
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawBallShape(g, x, y, r) {
+  function drawBallShape(g, x, y, r, rot = 0) {
     g.fillStyle = ORANGE;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
     if (r < 7) return;
     g.save();
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip();
+    g.translate(x, y);
+    g.rotate(rot);
     g.strokeStyle = 'rgba(60,25,5,.55)';
     g.lineWidth = Math.max(1, r * 0.08);
     g.beginPath();
-    g.moveTo(x, y - r); g.lineTo(x, y + r);
-    g.moveTo(x - r, y); g.lineTo(x + r, y);
-    g.moveTo(x - r * 0.62, y - r * 0.82); g.quadraticCurveTo(x - r * 0.18, y, x - r * 0.62, y + r * 0.82);
-    g.moveTo(x + r * 0.62, y - r * 0.82); g.quadraticCurveTo(x + r * 0.18, y, x + r * 0.62, y + r * 0.82);
+    g.moveTo(0, -r); g.lineTo(0, r);
+    g.moveTo(-r, 0); g.lineTo(r, 0);
+    g.moveTo(-r * 0.62, -r * 0.82); g.quadraticCurveTo(-r * 0.18, 0, -r * 0.62, r * 0.82);
+    g.moveTo(r * 0.62, -r * 0.82); g.quadraticCurveTo(r * 0.18, 0, r * 0.62, r * 0.82);
     g.stroke();
     g.restore();
   }
 
-  function drawHoopBack(g, h, s) {
-    const bb = h.bb;
-    g.fillStyle = '#ffffff';
+  // Footer floor, plus the side-view hoop's pole, backboard and the far half of the rim.
+  function drawHoopBack(g, s) {
+    const h = L.hoop;
+    const off = -s;
+    g.strokeStyle = '#e2e2e2';
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, L.floorY + off); g.lineTo(innerWidth, L.floorY + off); g.stroke();
+    g.strokeStyle = '#cdcdcd';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(h.poleX, L.floorY + off);
+    g.lineTo(h.poleX, h.bbTop + 14 + off);
+    g.lineTo(h.bbX - 4, h.bbTop + 14 + off);
+    g.stroke();
+    g.fillStyle = '#d4d4d4';
+    g.fillRect(h.bbX - 4, h.bbTop + off, 4, h.bbBot - h.bbTop);
     g.strokeStyle = '#bdbdbd';
-    g.lineWidth = 1.5;
-    g.beginPath(); g.roundRect(bb.x, bb.y - s, bb.w, bb.h, 4); g.fill(); g.stroke();
-    g.strokeStyle = '#d0d0d0';
-    g.strokeRect(h.cx - 18, bb.y - s + bb.h - 34, 36, 26);
-    g.strokeStyle = ORANGE;
     g.lineWidth = 2;
-    g.beginPath(); g.ellipse(h.cx, h.rimY - s, h.rx, h.ry, 0, Math.PI, Math.PI * 2); g.stroke();
-    // floor line
-    g.strokeStyle = '#e1e1e1'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(h.cx - 90, h.floorY - s); g.lineTo(h.cx + 90, h.floorY - s); g.stroke();
+    g.beginPath(); g.moveTo(h.bbX, h.rimY + off); g.lineTo(h.rimX - h.half, h.rimY + off); g.stroke();
+    g.strokeStyle = ORANGE;
+    g.beginPath(); g.ellipse(h.rimX, h.rimY + off, h.half, 3, 0, Math.PI, Math.PI * 2); g.stroke();
   }
 
-  function drawHoopFront(g, h, s, swish) {
+  // Net and the near half of the rim, drawn over the ball. `swish` (0-1) stretches the net.
+  function drawHoopFront(g, s, swish) {
+    const h = L.hoop;
     const top = h.rimY - s;
-    const bulge = swish * 5;
+    const bottom = top + h.netH + swish * 9;
+    const bw = h.half * 0.55 + swish * 4;
     g.strokeStyle = '#c4c4c4';
     g.lineWidth = 1;
-    const n = 7;
-    for (let i = 0; i <= n; i++) {
-      const u = i / n;
-      const xTop = h.cx - h.rx + u * h.rx * 2;
-      const xBot = h.cx - 16 + u * 32 + (u - 0.5) * bulge * 2;
-      const yTop = top + Math.sin(u * Math.PI) * h.ry;
-      g.beginPath(); g.moveTo(xTop, yTop); g.lineTo(xBot, top + h.netH + swish * 6); g.stroke();
+    for (let i = 0; i <= 5; i++) {
+      const u = i / 5;
+      g.beginPath();
+      g.moveTo(h.rimX - h.half + u * h.half * 2, top + Math.sin(u * Math.PI) * 3);
+      g.lineTo(h.rimX - bw + u * bw * 2, bottom);
+      g.stroke();
     }
-    for (let j = 1; j <= 3; j++) {
-      const v = j / 4;
-      const half = lerp(h.rx, 16 + bulge, v);
-      const yy = top + v * (h.netH + swish * 6);
-      g.beginPath(); g.moveTo(h.cx - half, yy); g.lineTo(h.cx + half, yy); g.stroke();
+    for (let j = 1; j <= 2; j++) {
+      const v = j / 3;
+      const half = lerp(h.half, bw, v);
+      const yy = lerp(top, bottom, v);
+      g.beginPath(); g.moveTo(h.rimX - half, yy); g.lineTo(h.rimX + half, yy); g.stroke();
     }
     g.strokeStyle = ORANGE;
     g.lineWidth = 2.4;
-    g.beginPath(); g.ellipse(h.cx, top, h.rx, h.ry, 0, 0, Math.PI); g.stroke();
+    g.beginPath(); g.ellipse(h.rimX, top, h.half, 3, 0, 0, Math.PI); g.stroke();
+  }
+
+  function drawFloorShadow(g, x, yBottom, r, s) {
+    const gap = L.floorY - yBottom;
+    const k = clamp(1 - gap / 260, 0.25, 1);
+    g.fillStyle = `rgba(0,0,0,${(0.13 * k).toFixed(3)})`;
+    g.beginPath(); g.ellipse(x, L.floorY - s, r * (0.6 + 0.5 * k), r * 0.22, 0, 0, Math.PI * 2); g.fill();
   }
 
   let litCount = -1;
@@ -871,20 +940,20 @@
       g.lineWidth = 1.5;
       g.strokeStyle = '#dedede';
       g.beginPath(); g.moveTo(L.railX, top); g.lineTo(L.railX, bot); g.stroke();
-      const fillTo = !ball ? top : ball.phase === 'rail' ? ball.y : ball.phase === 'drop' ? bot : top;
+      const fillTo = !ball ? top : ball.phase === 'rail' ? ball.y : ball.phase === 'free' ? bot : top;
       if (fillTo > top) {
         g.strokeStyle = ORANGE;
         g.beginPath(); g.moveTo(L.railX, top); g.lineTo(L.railX, fillTo); g.stroke();
       }
       L.nodes.forEach((ny) => {
         const y = ny - s;
-        const on = ball && (ball.phase === 'drop' || (ball.phase === 'rail' && ball.y >= y - 0.5));
+        const on = ball && (ball.phase === 'free' || (ball.phase === 'rail' && ball.y >= y - 0.5));
         if (on) lit++;
         g.beginPath(); g.arc(L.railX, y, 4.5, 0, Math.PI * 2);
         g.fillStyle = on ? ORANGE : '#fbfbfb'; g.fill();
         g.strokeStyle = on ? ORANGE : '#cfcfcf'; g.lineWidth = 1.5; g.stroke();
       });
-    } else if (ball && ball.phase === 'drop') {
+    } else if (ball && ball.phase === 'free') {
       lit = L.nodes.length;
     } else if (ball && ball.phase === 'rail') {
       lit = L.nodes.filter((ny) => ball.y + s >= ny - 0.5).length;
@@ -895,17 +964,17 @@
     }
 
     // hoop + ball
-    const h = L.hoop;
-    const hoopVisible = h.bb.y - s < vh + 20 && h.floorY - s > -20;
-    if (hoopVisible) drawHoopBack(g, h, s);
+    const hoopVisible = L.hoop.bbTop - s < vh + 20 && L.floorY - s > -20;
+    if (hoopVisible) drawHoopBack(g, s);
     if (ball) {
       if (ball.phase === 'rail') {
         g.fillStyle = 'rgba(242,106,27,.16)';
         g.beginPath(); g.arc(ball.x, ball.y, ball.r + 4, 0, Math.PI * 2); g.fill();
       }
-      drawBallShape(g, ball.x, ball.y, ball.r);
+      if (ball.phase === 'free') drawFloorShadow(g, ball.x, ball.y + s + ball.r, ball.r, s);
+      drawBallShape(g, ball.x, ball.y, ball.r, ball.spin || 0);
     }
-    if (hoopVisible) drawHoopFront(g, h, s, ball && ball.phase === 'drop' ? ball.swish : 0);
+    if (hoopVisible) drawHoopFront(g, s, B.mode === 'free' ? B.net : 0);
 
     if (cfg.debug) drawGuides(g, s, ball);
   }
@@ -930,15 +999,11 @@
         g.beginPath(); g.arc(pt.x, pt.y, 1.4, 0, Math.PI * 2); g.fill();
       }
     }
-    // drop path preview (page-space)
-    const h = L.hoop;
-    if (h.bb.y - s < L.vh && L.railBot - s > -200) {
+    // drop guide: straight down from the last node, through the rim, to the floor
+    if (L.railBot - s < L.vh && L.floorY - s > 0) {
       g.fillStyle = 'rgba(0,0,0,.2)';
-      for (let i = 0; i <= 30; i++) {
-        const u = i / 30;
-        const x = lerp(L.railX, h.cx, u);
-        const y = lerp(L.railBot, h.rimY - h.ballR * 0.5, u) - 4 * cfg.dropArc * u * (1 - u) - s;
-        g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI * 2); g.fill();
+      for (let y = L.railBot + 10; y < L.floorY - 4; y += 7) {
+        g.beginPath(); g.arc(L.railX, y - s, 1.2, 0, Math.PI * 2); g.fill();
       }
     }
     g.restore();
@@ -951,15 +1016,16 @@
     if (!ball) phase = s < L.windStart ? 'dribbling' : `wind-up ${Math.round(clamp((s - L.windStart) / Math.max(1, cfg.windup), 0, 1) * 100)}%`;
     else if (ball.phase === 'flight') phase = `ball in the air ${Math.round(ball.p * 100)}%`;
     else if (ball.phase === 'rail') phase = `on the rail · section ${Math.max(1, L.nodes.filter((ny) => ball.y + s >= ny - 0.5).length)}/${L.nodes.length}`;
-    else phase = ball.p >= 1 ? 'swish ✓' : `dropping into the hoop ${Math.round(ball.p * 100)}%`;
+    else phase = B.grounded && B.vx === 0 ? 'resting on the floor' : 'ball loose on the floor';
     const lines = [
       `scroll ${Math.round(s)}px · ${phase}`,
-      `shot ${Math.round(L.shotStart)}→${Math.round(L.shotEnd)}px · drop ${Math.round(L.dropStart)}→${Math.round(L.dropEnd)}px`,
+      `shot ${Math.round(L.shotStart)}→${Math.round(L.shotEnd)}px · drops at ${Math.round(L.railEnd)}px`,
       `court ${Math.round(L.court.w)}×${Math.round(L.court.h)} · column ${Math.round(timeline.getBoundingClientRect().width)}px`,
     ];
     const warn = [];
     if (L.railTop - L.anchorY < L.shotStart + 120) warn.push('Air gap is short: the ball reaches the rail almost right away.');
     if (L.crossesText) warn.push('The ball passes over text: widen the swing or raise the arc.');
+    if (L.floorY - L.railEnd > L.vh) warn.push('The floor is below the screen when the ball drops: set "Dot rides at" to a lower % or shorten "Hoop below the last node".');
     if (L.windStart < 0) warn.push('Wind-up starts before any scrolling.');
     const text = lines.join('\n') + (warn.length ? '\n' + warn.map((w) => '⚠ ' + w).join('\n') : '');
     if (text !== hudText) {
@@ -1290,7 +1356,8 @@
     if (dirty) relayout();
     const s = scrollY;
     court.draw(simT, s);
-    const ball = ballAt(s);
+    const ball = updateFreeBall(s, dt) || ballAt(s);
+    prevScroll = s;
     drawOverlay(s, ball);
     updateHud(s, ball);
     requestAnimationFrame(frame);
