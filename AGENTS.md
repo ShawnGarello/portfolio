@@ -51,6 +51,13 @@ Content (a short bio and two to four projects) should be written alongside the m
   - `free`: once scrolling reaches `L.railEnd`, `updateFreeBall()` hands the ball to physics in page space (`stepBall()`): gravity, the rim ends and backboard as colliders, a damping net, a floor bounce, rolling friction and screen-edge walls. Scrolling back above the last node returns it to the rail. Arriving at the bottom without scrolling through, such as after a reload, places the ball already at rest.
 
   Keep the scroll-driven part exactly reversible.
+- **Footer easter eggs.** While the ball is on the floor, an invisible `#ballHit` button follows it.
+  - Tapping or clicking it (or pressing Enter or Space when it's focused) bounces the ball.
+  - Pressing, dragging back and letting go shoots it slingshot-style (`SHOT_POWER`, `SHOT_MAX`), with a pull line and the predicted arc drawn while aiming.
+  - A shot that drops through the rim before touching the floor scores (`onScore()`): the net swishes, `+2` and confetti appear, and a counter shows on the floor.
+  - Three makes reveal `#egg`, a placeholder line for a surprise that hasn't been decided yet.
+
+  Keep these hidden extras: they should never block content or be required to use the site.
 - **Layout.** `measure()` caches page positions. `railDotDocY()` eases the dot onto the last node when the page is too short for that node to reach the dot line. `fitYard()` sizes the space under the last section so the footer floor sits a fixed distance below the rim.
 - **Tune panel.** Every adjustable value lives in `DEFS` with a label, range and default. Settings persist in `localStorage` under `court-greybox:v2`. Bump the key, and migrate what still applies, whenever the meaning of a value changes.
 
@@ -61,7 +68,8 @@ Verify in a real browser before reporting work as done:
 - Check desktop (1440x900) and phone (390x844).
 - Confirm there are no console errors.
 - Play the ticket through, and also skip it.
-- Scroll forward through every phase (dribble, wind-up, flight, rail, drop, swish), then back up to the top.
+- Scroll forward through every phase (dribble, wind-up, flight, rail, drop through the hoop, ball at rest), then back up to the top.
+- On the floor, tap the ball, drag back and shoot it, and use Enter on the focused ball.
 - Check that reduced motion skips the ticket.
 
 Say plainly what was and wasn't checked.

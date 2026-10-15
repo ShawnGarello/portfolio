@@ -68,6 +68,15 @@
   .yard { position: relative; height: 240px; }
   .yard .guide-label { top: 30%; }
   .tail { height: 40px; }
+  .egg { margin: 10px 0 0; text-align: center; font: 12px var(--mono); letter-spacing: .08em; color: var(--orange); visibility: hidden; }
+  .egg.on { visibility: visible; }
+  .ball-hit {
+    display: none; position: fixed; left: 0; top: 0; z-index: 55; width: 48px; height: 48px; margin: -24px 0 0 -24px;
+    padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: grab; touch-action: none;
+  }
+  .ball-hit.on { display: block; }
+  .ball-hit:active { cursor: grabbing; }
+  .ball-hit:focus-visible { outline: 2px solid var(--orange); outline-offset: -8px; }
 
   .timeline { position: relative; }
   .sec { padding-bottom: 76px; }
@@ -264,10 +273,11 @@
 
   <div class="yard" id="yard"><span class="guide-label">the dot drops through the hoop onto the floor</span></div>
   <footer class="col signoff"><span>© 2026 Shawn Garello</span><span>sign-off line</span></footer>
-  <div class="tail"></div>
+  <div class="tail"><p class="egg" id="egg" aria-live="polite">3 for 3 · easter egg goes here</p></div>
 </main>
 
 <canvas id="overlay" aria-hidden="true"></canvas>
+<button class="ball-hit" id="ballHit" type="button" aria-label="Basketball. Press to bounce it, or drag back and let go to shoot."></button>
 <div id="hud" aria-hidden="true"></div>
 
 <div class="gate gone" id="gate">
@@ -453,6 +463,7 @@
     L.ballR = cfg.endBall / 2;
     L.hoop = hoopGeom(L.railX, L.railBot + cfg.hoopDrop, L.ballR);
     L.floorY = yard.getBoundingClientRect().bottom + sy;
+    L.colRight = bioEl.getBoundingClientRect().right;
     L.shotStart = cfg.trigger;
     L.windStart = cfg.trigger - cfg.windup;
     L.maxScroll = html.scrollHeight - vh;
@@ -512,12 +523,15 @@
 
   // ---------- the ball on the floor: real physics once the dot leaves the last node ----------
   const GRAVITY = 2200; // px/s²
-  const B = { mode: 'path', x: 0, y: 0, vx: 0, vy: 0, r: 5, spin: 0, net: 0, nudge: false, grounded: false };
+  const B = {
+    mode: 'path', x: 0, y: 0, vx: 0, vy: 0, r: 5, spin: 0, net: 0,
+    nudge: false, grounded: false, held: false, userShot: false,
+  };
   let prevScroll = null;
 
   function updateFreeBall(s, dt) {
     const inEnd = B.mode === 'free' ? s >= L.railEnd - 24 : s >= L.railEnd;
-    if (!inEnd) { B.mode = 'path'; return null; }
+    if (!inEnd) { B.mode = 'path'; B.held = false; drag = null; return null; }
     if (B.mode !== 'free') {
       B.mode = 'free';
       const dropping = prevScroll !== null && prevScroll < L.railEnd && !reduceMotion;
@@ -535,6 +549,8 @@
 
   function stepBall(dt) {
     B.r = Math.min(L.ballR, B.r + dt * 70); // the dot grows back into the ball
+    B.net = Math.max(0, B.net - dt * 2.2);
+    if (B.held) return; // being aimed
     const n = 4, h = dt / n;
     for (let i = 0; i < n; i++) {
       const prevY = B.y;
@@ -548,6 +564,7 @@
           B.vy = B.vy > 90 ? -B.vy * 0.52 : 0;
           B.vx *= 0.92;
           if (B.nudge) { B.vx += 300; B.nudge = false; } // roll out from under the hoop
+          B.userShot = false; // a shot only counts until the ball touches the floor
         }
       }
       if (B.x < B.r) { B.x = B.r; B.vx = Math.abs(B.vx) * 0.6; }
@@ -556,7 +573,6 @@
     B.grounded = B.vy === 0 && B.y + B.r >= L.floorY - 0.5;
     if (B.grounded) { B.vx *= Math.exp(-2.4 * dt); if (Math.abs(B.vx) < 3) B.vx = 0; }
     B.spin += (B.vx * dt) / Math.max(1, B.r);
-    B.net = Math.max(0, B.net - dt * 2.2);
   }
 
   function collidePoint(px, py, pr) {
@@ -578,8 +594,140 @@
       if (B.x >= h.bbX - 2) { B.x = h.bbX + B.r; B.vx = Math.abs(B.vx) * 0.55; }
       else { B.x = h.bbX - 4 - B.r; B.vx = -Math.abs(B.vx) * 0.55; }
     }
-    if (prevY < h.rimY && B.y >= h.rimY && B.vy > 0 && Math.abs(B.x - h.rimX) < h.half - 1) B.net = 1;
+    if (prevY < h.rimY && B.y >= h.rimY && B.vy > 0 && Math.abs(B.x - h.rimX) < h.half - 1) {
+      B.net = 1;
+      if (B.userShot) { B.userShot = false; onScore(); }
+    }
     if (B.y > h.rimY && B.y < h.rimY + h.netH && Math.abs(B.x - h.rimX) < h.half) { B.vx *= 0.97; B.vy *= 0.985; }
+  }
+
+  // ---------- easter eggs: tap the ball to bounce it, drag back and let go to shoot ----------
+  const hit = $('ballHit');
+  const egg = $('egg');
+  const SHOT_POWER = 7.5;   // launch speed per px of pull
+  const SHOT_MAX = 1800;    // px/s
+  let drag = null;
+  let made = 0;
+  const fx = [];
+
+  function aimVelocity() {
+    let vx = (B.x - drag.px) * SHOT_POWER;
+    let vy = (B.y - scrollY - drag.py) * SHOT_POWER;
+    const sp = Math.hypot(vx, vy);
+    if (sp > SHOT_MAX) { vx *= SHOT_MAX / sp; vy *= SHOT_MAX / sp; }
+    return { x: vx, y: vy };
+  }
+
+  function bounceBall() {
+    B.vy = B.grounded || L.floorY - (B.y + B.r) < 8 ? -760 : B.vy - 420;
+    B.vx += (Math.random() - 0.5) * 120;
+    B.userShot = false;
+  }
+
+  hit.addEventListener('pointerdown', (e) => {
+    if (B.mode !== 'free') return;
+    e.preventDefault();
+    hit.setPointerCapture(e.pointerId);
+    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, px: e.clientX, py: e.clientY, aiming: false };
+  });
+  hit.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.px = e.clientX;
+    drag.py = e.clientY;
+    if (!drag.aiming && Math.hypot(drag.px - drag.x0, drag.py - drag.y0) > 8) {
+      drag.aiming = true;
+      B.held = true;
+      B.vx = 0;
+      B.vy = 0;
+    }
+  });
+  hit.addEventListener('pointerup', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (drag.aiming) {
+      const v = aimVelocity();
+      B.vx = v.x;
+      B.vy = v.y;
+      B.userShot = true;
+      B.held = false;
+    } else {
+      bounceBall();
+    }
+    drag = null;
+  });
+  hit.addEventListener('pointercancel', () => { B.held = false; drag = null; });
+  hit.addEventListener('click', (e) => { if (e.detail === 0) bounceBall(); }); // keyboard: Enter / Space
+
+  function onScore() {
+    made++;
+    const h = L.hoop;
+    fx.push({ text: '+2', x: h.rimX + h.half + 12, y: h.rimY - 4, vx: 0, vy: -46, g: 0, life: 1.1, max: 1.1 });
+    for (let i = 0; i < 18; i++) {
+      fx.push({
+        x: h.rimX, y: h.rimY, vx: (Math.random() - 0.5) * 420, vy: -250 - Math.random() * 380, g: 1300,
+        life: 0.8 + Math.random() * 0.5, max: 1.3, size: 3 + (i % 2), color: [ORANGE, '#232323', '#c9c9c9'][i % 3],
+      });
+    }
+    if (made >= 3) egg.classList.add('on');
+  }
+
+  function updateFx(dt) {
+    for (let i = fx.length - 1; i >= 0; i--) {
+      const p = fx[i];
+      p.life -= dt;
+      if (p.life <= 0) { fx.splice(i, 1); continue; }
+      p.vy += p.g * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  function drawFx(g, s) {
+    for (const p of fx) {
+      g.globalAlpha = clamp(p.life / p.max, 0, 1);
+      if (p.text) {
+        g.fillStyle = ORANGE;
+        g.font = '700 14px ui-monospace, Consolas, monospace';
+        g.textAlign = 'left';
+        g.fillText(p.text, p.x, p.y - s);
+      } else {
+        g.fillStyle = p.color;
+        g.fillRect(p.x - p.size / 2, p.y - s - p.size / 2, p.size, p.size);
+      }
+    }
+    g.globalAlpha = 1;
+    if (made > 0) {
+      g.fillStyle = '#9a9a9a';
+      g.font = '11px ui-monospace, Consolas, monospace';
+      g.textAlign = 'right';
+      g.fillText(`${made} made`, L.colRight, L.floorY - 8 - s);
+    }
+  }
+
+  // Pull line and the predicted arc while aiming.
+  function drawAim(g, s) {
+    const v = aimVelocity();
+    g.save();
+    g.setLineDash([3, 4]);
+    g.strokeStyle = 'rgba(35,35,35,.35)';
+    g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(B.x, B.y - s); g.lineTo(drag.px, drag.py); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = ORANGE;
+    for (let i = 1; i <= 48; i++) {
+      const t = i / 30;
+      const x = B.x + v.x * t;
+      const y = B.y + v.y * t + 0.5 * GRAVITY * t * t;
+      if (y + B.r > L.floorY || x < 0 || x > innerWidth) break;
+      g.globalAlpha = 1 - i / 52;
+      g.beginPath(); g.arc(x, y - s, 2.2, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+  }
+
+  function placeHitTarget(s) {
+    const on = B.mode === 'free';
+    hit.classList.toggle('on', on);
+    if (on) hit.style.transform = `translate(${B.x.toFixed(1)}px, ${(B.y - s).toFixed(1)}px)`;
   }
 
   // ---------- court ----------
@@ -975,6 +1123,16 @@
       drawBallShape(g, ball.x, ball.y, ball.r, ball.spin || 0);
     }
     if (hoopVisible) drawHoopFront(g, s, B.mode === 'free' ? B.net : 0);
+    if (B.mode === 'free') {
+      drawFx(g, s);
+      if (drag && drag.aiming) drawAim(g, s);
+      else if (cfg.debug && B.grounded && B.vx === 0) {
+        g.fillStyle = '#b5b5b5';
+        g.font = '10px ui-monospace, Consolas, monospace';
+        g.textAlign = 'center';
+        g.fillText('tap · or drag back to shoot', B.x, B.y - s - B.r - 10);
+      }
+    }
 
     if (cfg.debug) drawGuides(g, s, ball);
   }
@@ -1016,7 +1174,8 @@
     if (!ball) phase = s < L.windStart ? 'dribbling' : `wind-up ${Math.round(clamp((s - L.windStart) / Math.max(1, cfg.windup), 0, 1) * 100)}%`;
     else if (ball.phase === 'flight') phase = `ball in the air ${Math.round(ball.p * 100)}%`;
     else if (ball.phase === 'rail') phase = `on the rail · section ${Math.max(1, L.nodes.filter((ny) => ball.y + s >= ny - 0.5).length)}/${L.nodes.length}`;
-    else phase = B.grounded && B.vx === 0 ? 'resting on the floor' : 'ball loose on the floor';
+    else if (drag && drag.aiming) phase = 'aiming a shot';
+    else phase = (B.grounded && B.vx === 0 ? 'resting on the floor' : 'ball loose on the floor') + (made ? ` · ${made} made` : '');
     const lines = [
       `scroll ${Math.round(s)}px · ${phase}`,
       `shot ${Math.round(L.shotStart)}→${Math.round(L.shotEnd)}px · drops at ${Math.round(L.railEnd)}px`,
@@ -1358,6 +1517,8 @@
     court.draw(simT, s);
     const ball = updateFreeBall(s, dt) || ballAt(s);
     prevScroll = s;
+    updateFx(dt);
+    placeHitTarget(s);
     drawOverlay(s, ball);
     updateHud(s, ball);
     requestAnimationFrame(frame);
