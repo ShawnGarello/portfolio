@@ -117,7 +117,8 @@
     --c: 1.5em;   /* corner chamfer */
     --n: 1.2em;   /* perforation notch */
     position: relative;
-    width: 28em;
+    display: flex;
+    width: 56em;
     font-size: calc(10px * var(--ticket-scale) * var(--ticket-fit));
     font-family: var(--mono);
     color: var(--charcoal);
@@ -128,30 +129,41 @@
   .ticket.in { opacity: 1; transform: none; }
   .t-main, .t-stub { position: relative; background: var(--cream); }
   .t-main {
-    padding: 2em 2.2em 1.9em;
-    clip-path: polygon(var(--c) 0, calc(100% - var(--c)) 0, 100% var(--c), 100% calc(100% - var(--n)), calc(100% - var(--n)) 100%, var(--n) 100%, 0 calc(100% - var(--n)), 0 var(--c));
+    flex: 1;
+    min-width: 0;
+    padding: 2em 2.4em 2.1em;
+    clip-path: polygon(var(--c) 0, calc(100% - var(--n)) 0, 100% var(--n), 100% calc(100% - var(--n)), calc(100% - var(--n)) 100%, var(--c) 100%, 0 calc(100% - var(--c)), 0 var(--c));
     transition: transform .5s cubic-bezier(.4,0,.2,1) .12s, opacity .35s ease .2s;
   }
   .t-stub {
-    padding: 1.7em 2.2em 1.9em;
-    clip-path: polygon(var(--n) 0, calc(100% - var(--n)) 0, 100% var(--n), 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, var(--c) 100%, 0 calc(100% - var(--c)), 0 var(--n));
-    transform-origin: 15% 0;
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: 14.5em;
+    padding: 2em 2em 2.1em;
+    clip-path: polygon(var(--n) 0, calc(100% - var(--c)) 0, 100% var(--c), 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, var(--n) 100%, 0 calc(100% - var(--n)), 0 var(--n));
+    transform-origin: 0 0;
     transition: transform .55s cubic-bezier(.3,.7,.3,1), opacity .4s ease .1s;
   }
-  .t-stub::before { content: ""; position: absolute; top: 0; left: calc(var(--n) + .6em); right: calc(var(--n) + .6em); border-top: .16em dashed rgba(35,35,35,.4); }
-  .ticket.torn .t-stub { transform: translateY(3em) rotate(7deg); opacity: 0; }
-  .ticket.torn .t-main { transform: translateY(-1.4em); opacity: 0; }
+  .t-stub::before { content: ""; position: absolute; left: 0; top: calc(var(--n) + .6em); bottom: calc(var(--n) + .6em); border-left: .16em dashed rgba(35,35,35,.4); }
+  .ticket.torn .t-stub { transform: translate(2.6em, 1.2em) rotate(7deg); opacity: 0; }
+  .ticket.torn .t-main { transform: translateX(-1.4em); opacity: 0; }
 
   .t-meta { display: flex; justify-content: space-between; gap: 1em; font-size: 1.05em; letter-spacing: .12em; }
-  .t-event { display: flex; align-items: center; gap: .8em; margin-top: 1.7em; font-size: 1.05em; letter-spacing: .1em; }
+  .t-event { display: flex; align-items: center; gap: .8em; margin-top: 1.4em; font-size: 1.05em; letter-spacing: .1em; }
   .dia { flex: none; width: .7em; height: .7em; border: .14em solid currentColor; transform: rotate(45deg); }
   .lead { flex: 1; min-width: 1em; border-bottom: .2em dotted rgba(35,35,35,.45); }
-  .t-name { margin: .3em 0 .38em; font: 4.6em/.95 var(--serif); letter-spacing: -.02em; }
+  .t-body { display: grid; grid-template-columns: 1fr 10.5em; align-items: end; gap: 2.2em; margin-top: 1.4em; }
+  .t-name { margin: 0 0 .45em; font: 4em/1 var(--serif); letter-spacing: -.02em; white-space: nowrap; }
   .t-art {
-    position: relative; display: grid; place-items: center; height: 11em; margin-bottom: 1.6em;
+    position: relative; display: grid; place-items: center; height: 10.5em;
     background: radial-gradient(circle, rgba(35,35,35,.2) .08em, transparent .1em) 0 0 / .9em .9em;
   }
-  .t-art svg { width: 8.6em; height: 8.6em; overflow: visible; }
+  .t-art svg { width: 7.8em; height: 7.8em; overflow: visible; }
+  .t-stub-head { font-size: 1.05em; letter-spacing: .12em; }
+  .t-seat { margin: 1.2em 0 1.4em; }
+  .t-seat > div { display: flex; align-items: baseline; gap: .6em; margin: .35em 0; font-size: 1.05em; letter-spacing: .08em; }
+  .t-seat dd { margin: 0; font: 1.8em/1.1 var(--serif); letter-spacing: 0; }
   .br { position: absolute; width: 1.2em; height: 1.2em; border: 0 solid var(--charcoal); }
   .br.tl { left: 0; top: 0; border-width: .16em 0 0 .16em; }
   .br.tr { right: 0; top: 0; border-width: .16em .16em 0 0; }
@@ -163,15 +175,15 @@
   .t-fill { display: block; width: 0; height: 100%; background: var(--orange); }
   .t-pct { min-width: 3.2em; text-align: right; }
   .t-stamp {
-    position: absolute; right: 2.2em; top: 17.2em; padding: .25em .7em;
+    position: absolute; right: 1.1em; top: 9.2em; padding: .25em .7em;
     border: .25em solid var(--orange); color: var(--orange);
     font-size: 1.5em; font-weight: 700; letter-spacing: .14em;
     opacity: 0; transform: rotate(-12deg) scale(1.6);
     transition: transform .16s cubic-bezier(.3,1.6,.5,1), opacity .12s;
   }
   .t-stamp.on { opacity: .92; transform: rotate(-12deg) scale(1); }
-  .t-barcode { display: flex; align-items: stretch; height: 4.2em; margin-top: 1.1em; }
-  .t-barcode b { display: block; background: var(--charcoal); }
+  .t-barcode { display: flex; align-items: stretch; height: 3.6em; margin-top: auto; overflow: hidden; }
+  .t-barcode b { display: block; flex: none; background: var(--charcoal); }
 
   .skip {
     position: absolute; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 8px;
@@ -263,26 +275,34 @@
   <div class="ticket" id="ticket" role="img" aria-label="Game ticket for Shawn Garello's portfolio">
     <div class="t-main">
       <div class="t-meta"><span>ADMIT ONE</span><span>Nº 000023</span></div>
-      <div class="t-event"><span class="dia"></span>HOME COURT<i class="lead"></i>4 ON 4</div>
-      <div class="t-name">Shawn<br>Garello</div>
-      <div class="t-art">
-        <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
-        <svg viewBox="0 0 100 100" fill="none" stroke="#232323" stroke-width="1.6">
-          <circle cx="50" cy="50" r="42"/>
-          <path d="M50 8v84M8 50h84"/>
-          <path d="M22 19c13 9 13 53 0 62M78 19c-13 9-13 53 0 62"/>
-        </svg>
+      <div class="t-event"><span class="dia"></span>HOME COURT<i class="lead"></i>HALF COURT · 4 ON 4</div>
+      <div class="t-body">
+        <div class="t-info">
+          <div class="t-name">Shawn Garello</div>
+          <div class="t-lines">
+            <div><span>DATE</span><i class="lead"></i><span id="tDate">—</span></div>
+            <div><span>TIP-OFF</span><i class="lead"></i><span id="tTime">—</span></div>
+          </div>
+          <div class="t-load"><span>LOADING</span><span class="t-track"><span class="t-fill" id="tFill"></span></span><span class="t-pct" id="tPct">0%</span></div>
+        </div>
+        <div class="t-art">
+          <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+          <svg viewBox="0 0 100 100" fill="none" stroke="#232323" stroke-width="1.6">
+            <circle cx="50" cy="50" r="42"/>
+            <path d="M50 8v84M8 50h84"/>
+            <path d="M22 19c13 9 13 53 0 62M78 19c-13 9-13 53 0 62"/>
+          </svg>
+        </div>
       </div>
-      <div class="t-lines">
-        <div><span>DATE</span><i class="lead"></i><span id="tDate">—</span></div>
-        <div><span>TIP-OFF</span><i class="lead"></i><span id="tTime">—</span></div>
-        <div><span>SEC · ROW · SEAT</span><i class="lead"></i><span>01 · A · 23</span></div>
-      </div>
-      <div class="t-load"><span>LOADING</span><span class="t-track"><span class="t-fill" id="tFill"></span></span><span class="t-pct" id="tPct">0%</span></div>
       <div class="t-stamp" id="tStamp">ADMITTED</div>
     </div>
     <div class="t-stub">
-      <div class="t-meta"><span>ADMIT ONE</span><span>SEC 01 · A · 23</span></div>
+      <div class="t-stub-head">ADMIT ONE</div>
+      <dl class="t-seat">
+        <div><dt>SEC</dt><i class="lead"></i><dd>01</dd></div>
+        <div><dt>ROW</dt><i class="lead"></i><dd>A</dd></div>
+        <div><dt>SEAT</dt><i class="lead"></i><dd>23</dd></div>
+      </dl>
       <div class="t-barcode" id="tBarcode"></div>
     </div>
   </div>
@@ -321,7 +341,7 @@
     { key: 'courtW', label: 'Court width', min: 320, max: 760, step: 2, def: 522, unit: 'px' },
     { key: 'courtH', label: 'Court height', min: 180, max: 520, step: 2, def: 348, unit: 'px' },
     { key: 'pixel', label: 'Pixel size (1 = smooth)', min: 1, max: 6, step: 1, def: 3, unit: '×' },
-    { group: 'Ticket', key: 'ticketScale', label: 'Ticket size', min: 0.7, max: 1.6, step: 0.01, def: 1.15, unit: '×' },
+    { group: 'Ticket', key: 'ticketScale', label: 'Ticket size', min: 0.6, max: 1.5, step: 0.01, def: 1.05, unit: '×' },
     { key: 'ticketMs', label: 'Ticket duration', min: 800, max: 5000, step: 100, def: 2200, unit: 'ms' },
     { key: 'darkGate', label: 'Dark backdrop', type: 'bool', def: false },
     { key: 'holdTicket', label: 'Hold ticket on screen (compare sizes)', type: 'bool', def: false },
@@ -338,11 +358,16 @@
     { group: 'Debug', key: 'players', label: 'Players running', type: 'bool', def: true },
     { key: 'debug', label: 'Show guides + readout', type: 'bool', def: true },
   ];
-  const STORE = 'court-greybox:v1';
+  const STORE = 'court-greybox:v2';
   const DEFAULTS = Object.fromEntries(DEFS.map((d) => [d.key, d.def]));
   const cfg = { ...DEFAULTS };
   try {
-    const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
+    let saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (!saved) {
+      // v1 sized a vertical ticket; keep everything else the viewer tuned
+      saved = JSON.parse(localStorage.getItem('court-greybox:v1') || '{}');
+      delete saved.ticketScale;
+    }
     for (const d of DEFS) if (typeof saved[d.key] === typeof d.def) cfg[d.key] = saved[d.key];
   } catch { /* storage unavailable: use defaults */ }
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch { /* ignore */ } };
@@ -919,9 +944,8 @@
 
   function fitTicket() {
     html.style.setProperty('--ticket-fit', 1);
-    const h = ticket.offsetHeight;
-    const max = innerHeight * 0.9;
-    html.style.setProperty('--ticket-fit', h > max ? (max / h).toFixed(3) : 1);
+    const fit = Math.min(1, (innerWidth * 0.92) / ticket.offsetWidth, (innerHeight * 0.9) / ticket.offsetHeight);
+    html.style.setProperty('--ticket-fit', fit.toFixed(3));
   }
 
   let ticketRaf = 0;
