@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Court Greybox</title>
+<style>
+  :root {
+    --bg: #fbfbfb;
+    --ink: #1f1f1f;
+    --muted: #747474;
+    --faint: #ababab;
+    --line: #e4e4e4;
+    --block: #efefef;
+    --orange: #f26a1b;
+    --cream: #efe6d6;
+    --charcoal: #232323;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    --serif: Georgia, "Times New Roman", serif;
+
+    /* Tunable (set from the panel) */
+    --col-w: 380px;
+    --court-w: 522px;
+    --court-ar: 522 / 348;
+    --gap-h: 300px;
+    --ticket-scale: 1.15;
+    --ticket-fit: 1;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  html.locked { overflow: hidden; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--muted);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Page ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 20; display: flex; justify-content: center; padding: 26px 0 18px; pointer-events: none;
+    background: linear-gradient(to bottom, var(--bg) 62%, rgba(251,251,251,0));
+  }
+  .nav-pill { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #f0f0f0; }
+  .nav-pill span { width: 38px; height: 38px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .nav-pill span + span { background: transparent; box-shadow: inset 0 0 0 1px #dcdcdc; }
+
+  .court-frame {
+    position: relative;
+    width: min(var(--court-w), 100%);
+    aspect-ratio: var(--court-ar);
+    margin: 4px auto 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #efefef;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .court-frame canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+  .col { width: min(var(--col-w), calc(100% - 32px)); margin: 0 auto; }
+  .bio { margin-top: 40px; }
+  .bio p { margin: 0 0 14px; }
+  .bio strong { color: var(--ink); font-weight: 500; }
+
+  .air { position: relative; height: var(--gap-h); }
+  .drop-air { position: relative; height: 200px; }
+
+  .timeline { position: relative; }
+  .sec { padding-bottom: 76px; }
+  .sec:last-child { padding-bottom: 0; }
+  .sec h2 { margin: 0 0 14px; font-size: 15px; font-weight: 500; color: var(--ink); transition: color .2s; }
+  .sec h2 .num { margin-right: 10px; font: 12px var(--mono); color: var(--faint); transition: color .2s; }
+  .sec h2.lit .num { color: var(--orange); }
+  .sec p { margin: 0 0 12px; }
+  .card { display: grid; place-items: center; aspect-ratio: 16 / 10; margin: 0 0 8px; border-radius: 12px; background: var(--block); font: 12px var(--mono); color: var(--faint); }
+  .card-cap { margin: 0 0 22px; font-size: 14px; }
+  .card-cap strong { color: var(--ink); font-weight: 500; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .row strong { color: var(--ink); font-weight: 500; }
+  .row span:last-child { font: 12px var(--mono); color: var(--faint); white-space: nowrap; }
+
+  .hoop-slot { height: 160px; }
+  .signoff { display: flex; justify-content: space-between; padding-top: 18px; font-size: 13px; }
+
+  .guide-label {
+    display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    padding: 4px 8px; border: 1px dashed #dadada; border-radius: 6px;
+    font: 11px var(--mono); letter-spacing: .03em; color: #b5b5b5; white-space: nowrap;
+  }
+  body.debug .guide-label { display: block; }
+
+  @media (max-width: 560px) {
+    .court-frame { border-radius: 0; box-shadow: none; }
+    .timeline { padding-left: 30px; }
+  }
+
+  #overlay { position: fixed; inset: 0; z-index: 50; width: 100vw; height: 100vh; pointer-events: none; }
+  #hud {
+    display: none; position: fixed; left: 12px; top: 12px; z-index: 60; max-width: min(360px, calc(100vw - 24px));
+    padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.88); box-shadow: 0 0 0 1px var(--line);
+    font: 11px/1.5 var(--mono); color: #555; white-space: pre-wrap; pointer-events: none;
+  }
+  body.debug #hud { display: block; }
+  #hud .warn { color: #c2410c; }
+
+  /* ---------- Ticket gate ---------- */
+  .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg); transition: opacity .45s ease; }
+  .gate.dark { background: #1c1c1c; }
+  .gate.hold { background: rgba(251,251,251,.84); pointer-events: none; }
+  .gate.dark.hold { background: rgba(28,28,28,.84); }
+  .gate.out { opacity: 0; pointer-events: none; }
+  .gate.gone { display: none; }
+
+  .ticket {
+    --c: 1.5em;   /* corner chamfer */
+    --n: 1.2em;   /* perforation notch */
+    position: relative;
+    width: 28em;
+    font-size: calc(10px * var(--ticket-scale) * var(--ticket-fit));
+    font-family: var(--mono);
+    color: var(--charcoal);
+    opacity: 0;
+    transform: translateY(1.6em);
+    transition: opacity .35s ease, transform .55s cubic-bezier(.2,.8,.2,1);
+  }
+  .ticket.in { opacity: 1; transform: none; }
+  .t-main, .t-stub { position: relative; background: var(--cream); }
+  .t-main {
+    padding: 2em 2.2em 1.9em;
+    clip-path: polygon(var(--c) 0, calc(100% - var(--c)) 0, 100% var(--c), 100% calc(100% - var(--n)), calc(100% - var(--n)) 100%, var(--n) 100%, 0 calc(100% - var(--n)), 0 var(--c));
+    transition: transform .5s cubic-bezier(.4,0,.2,1) .12s, opacity .35s ease .2s;
+  }
+  .t-stub {
+    padding: 1.7em 2.2em 1.9em;
+    clip-path: polygon(var(--n) 0, calc(100% - var(--n)) 0, 100% var(--n), 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, var(--c) 100%, 0 calc(100% - var(--c)), 0 var(--n));
+    transform-origin: 15% 0;
+    transition: transform .55s cubic-bezier(.3,.7,.3,1), opacity .4s ease .1s;
+  }
+  .t-stub::before { content: ""; position: absolute; top: 0; left: calc(var(--n) + .6em); right: calc(var(--n) + .6em); border-top: .16em dashed rgba(35,35,35,.4); }
+  .ticket.torn .t-stub { transform: translateY(3em) rotate(7deg); opacity: 0; }
+  .ticket.torn .t-main { transform: translateY(-1.4em); opacity: 0; }
+
+  .t-meta { display: flex; justify-content: space-between; gap: 1em; font-size: 1.05em; letter-spacing: .12em; }
+  .t-event { display: flex; align-items: center; gap: .8em; margin-top: 1.7em; font-size: 1.05em; letter-spacing: .1em; }
+  .dia { flex: none; width: .7em; height: .7em; border: .14em solid currentColor; transform: rotate(45deg); }
+  .lead { flex: 1; min-width: 1em; border-bottom: .2em dotted rgba(35,35,35,.45); }
+  .t-name { margin: .3em 0 .38em; font: 4.6em/.95 var(--serif); letter-spacing: -.02em; }
+  .t-art {
+    position: relative; display: grid; place-items: center; height: 11em; margin-bottom: 1.6em;
+    background: radial-gradient(circle, rgba(35,35,35,.2) .08em, transparent .1em) 0 0 / .9em .9em;
+  }
+  .t-art svg { width: 8.6em; height: 8.6em; overflow: visible; }
+  .br { position: absolute; width: 1.2em; height: 1.2em; border: 0 solid var(--charcoal); }
+  .br.tl { left: 0; top: 0; border-width: .16em 0 0 .16em; }
+  .br.tr { right: 0; top: 0; border-width: .16em .16em 0 0; }
+  .br.bl { left: 0; bottom: 0; border-width: 0 0 .16em .16em; }
+  .br.brr { right: 0; bottom: 0; border-width: 0 .16em .16em 0; }
+  .t-lines > div { display: flex; align-items: baseline; gap: .8em; margin: .55em 0; font-size: 1.05em; letter-spacing: .08em; }
+  .t-load { display: flex; align-items: center; gap: .8em; margin-top: 1.6em; font-size: 1.05em; letter-spacing: .12em; }
+  .t-track { flex: 1; height: 1em; padding: .14em; border: .14em solid var(--charcoal); }
+  .t-fill { display: block; width: 0; height: 100%; background: var(--orange); }
+  .t-pct { min-width: 3.2em; text-align: right; }
+  .t-stamp {
+    position: absolute; right: 2.2em; top: 17.2em; padding: .25em .7em;
+    border: .25em solid var(--orange); color: var(--orange);
+    font-size: 1.5em; font-weight: 700; letter-spacing: .14em;
+    opacity: 0; transform: rotate(-12deg) scale(1.6);
+    transition: transform .16s cubic-bezier(.3,1.6,.5,1), opacity .12s;
+  }
+  .t-stamp.on { opacity: .92; transform: rotate(-12deg) scale(1); }
+  .t-barcode { display: flex; align-items: stretch; height: 4.2em; margin-top: 1.1em; }
+  .t-barcode b { display: block; background: var(--charcoal); }
+
+  .skip {
+    position: absolute; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid #d6d6d6; border-radius: 8px; background: transparent;
+    font: 12px var(--mono); letter-spacing: .1em; color: #8a8a8a; cursor: pointer;
+  }
+  .gate.dark .skip { border-color: #444; color: #9a9a9a; }
+  .gate.hold .skip { display: none; }
+  .skip kbd { padding: 1px 5px; border: 1px solid currentColor; border-radius: 4px; font: inherit; font-size: 10px; }
+
+  /* ---------- Tune panel ---------- */
+  .panel {
+    position: fixed; right: 12px; bottom: 12px; z-index: 200; width: 292px; max-height: calc(100vh - 24px);
+    display: flex; flex-direction: column; border-radius: 12px; background: #fff;
+    box-shadow: 0 0 0 1px #e4e4e4, 0 8px 28px rgba(0,0,0,.08);
+    font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #333;
+  }
+  .p-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #efefef; }
+  .p-head strong { font-weight: 600; }
+  .p-body { overflow: auto; padding: 4px 12px 10px; }
+  .p-foot { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-top: 1px solid #efefef; }
+  .panel.collapsed { width: auto; }
+  .panel.collapsed .p-body, .panel.collapsed .p-foot { display: none; }
+  .panel.collapsed .p-head { border-bottom: 0; }
+  .p-group { margin: 12px 0 4px; font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #9a9a9a; }
+  .p-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 4px 0; }
+  .p-row output { font: 11px var(--mono); color: #777; }
+  .p-row input[type=range] { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: var(--orange); }
+  .p-row input[type=checkbox] { accent-color: var(--orange); }
+  .panel button { padding: 5px 9px; border: 1px solid #ddd; border-radius: 7px; background: #fafafa; font: inherit; color: #333; cursor: pointer; }
+  .panel button:hover { background: #f2f2f2; }
+  .p-copy { width: 100%; height: 0; padding: 0; border: 0; opacity: 0; }
+</style>
+</head>
+<body class="debug">
+
+<header class="nav" aria-hidden="true"><div class="nav-pill"><span></span><span></span></div></header>
+
+<main>
+  <section aria-label="Animated half-court basketball game">
+    <div class="court-frame" id="courtFrame"><canvas id="court" aria-hidden="true"></canvas></div>
+  </section>
+
+  <section class="col bio">
+    <p><strong>Intro line.</strong> Your name, what you do, and where you're based, in one short sentence.</p>
+    <p>A second line about what you like to build. Later, a few words here get small hover surprises.</p>
+    <p>A contact or "open to work" line.</p>
+  </section>
+
+  <div class="air"><span class="guide-label">air gap · the ball is in flight here</span></div>
+
+  <div class="col timeline" id="timeline">
+    <section class="sec">
+      <h2 data-node><span class="num">01</span>About</h2>
+      <p>Placeholder paragraph about you, about three or four lines long, so the spacing between rail nodes matches real content later on.</p>
+      <p>A second, shorter paragraph: what you're into outside of code, or what you're looking for next.</p>
+    </section>
+    <section class="sec">
+      <h2 data-node><span class="num">02</span>Projects</h2>
+      <div class="card">Project 01 · playable preview</div>
+      <p class="card-cap"><strong>Project one.</strong> One line on what it is and what you built.</p>
+      <div class="card">Project 02 · playable preview</div>
+      <p class="card-cap"><strong>Project two.</strong> One line on what it is and what you built.</p>
+      <div class="card">Project 03 · playable preview</div>
+      <p class="card-cap"><strong>Project three.</strong> One line on what it is and what you built.</p>
+    </section>
+    <section class="sec">
+      <h2 data-node><span class="num">03</span>Experience</h2>
+      <div class="row"><span><strong>Company</strong> · Role</span><span>2026 – now</span></div>
+      <div class="row"><span><strong>Company</strong> · Role</span><span>2025</span></div>
+      <div class="row"><span><strong>School</strong> · Degree</span><span>2023 – 2027</span></div>
+    </section>
+    <section class="sec">
+      <h2 data-node><span class="num">04</span>Contact</h2>
+      <p>Email · GitHub · LinkedIn</p>
+    </section>
+  </div>
+
+  <div class="drop-air" id="dropAir"><span class="guide-label">drop · the dot becomes the ball again</span></div>
+  <div class="hoop-slot" id="hoopSlot" aria-hidden="true"></div>
+  <footer class="col signoff"><span>© 2026 Shawn Garello</span><span>sign-off line</span></footer>
+  <div id="tailPad" style="height:40px"></div>
+</main>
+
+<canvas id="overlay" aria-hidden="true"></canvas>
+<div id="hud" aria-hidden="true"></div>
+
+<div class="gate gone" id="gate">
+  <div class="ticket" id="ticket" role="img" aria-label="Game ticket for Shawn Garello's portfolio">
+    <div class="t-main">
+      <div class="t-meta"><span>ADMIT ONE</span><span>Nº 000023</span></div>
+      <div class="t-event"><span class="dia"></span>HOME COURT<i class="lead"></i>4 ON 4</div>
+      <div class="t-name">Shawn<br>Garello</div>
+      <div class="t-art">
+        <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+        <svg viewBox="0 0 100 100" fill="none" stroke="#232323" stroke-width="1.6">
+          <circle cx="50" cy="50" r="42"/>
+          <path d="M50 8v84M8 50h84"/>
+          <path d="M22 19c13 9 13 53 0 62M78 19c-13 9-13 53 0 62"/>
+        </svg>
+      </div>
+      <div class="t-lines">
+        <div><span>DATE</span><i class="lead"></i><span id="tDate">—</span></div>
+        <div><span>TIP-OFF</span><i class="lead"></i><span id="tTime">—</span></div>
+        <div><span>SEC · ROW · SEAT</span><i class="lead"></i><span>01 · A · 23</span></div>
+      </div>
+      <div class="t-load"><span>LOADING</span><span class="t-track"><span class="t-fill" id="tFill"></span></span><span class="t-pct" id="tPct">0%</span></div>
+      <div class="t-stamp" id="tStamp">ADMITTED</div>
+    </div>
+    <div class="t-stub">
+      <div class="t-meta"><span>ADMIT ONE</span><span>SEC 01 · A · 23</span></div>
+      <div class="t-barcode" id="tBarcode"></div>
+    </div>
+  </div>
+  <button class="skip" id="skip" type="button">SKIP <kbd>Esc</kbd></button>
+</div>
+
+<aside class="panel" id="panel" aria-label="Tuning panel">
+  <div class="p-head"><strong>Tune</strong><button type="button" id="pToggle">Hide</button></div>
+  <div class="p-body" id="pBody"></div>
+  <div class="p-foot">
+    <button type="button" id="pReplay">Replay ticket</button>
+    <button type="button" id="pCopy">Copy values</button>
+    <button type="button" id="pReset">Reset</button>
+    <textarea class="p-copy" id="pCopyArea" aria-hidden="true" tabindex="-1"></textarea>
+  </div>
+</aside>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const html = document.documentElement;
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const easeOut = (t) => 1 - (1 - t) ** 3;
+  const easeIn = (t) => t * t;
+  const ORANGE = '#f26a1b';
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- tunable values ----------
+  const DEFS = [
+    { group: 'Layout', key: 'colW', label: 'Text column width', min: 300, max: 640, step: 2, def: 380, unit: 'px' },
+    { key: 'courtW', label: 'Court width', min: 320, max: 760, step: 2, def: 522, unit: 'px' },
+    { key: 'courtH', label: 'Court height', min: 180, max: 520, step: 2, def: 348, unit: 'px' },
+    { key: 'pixel', label: 'Pixel size (1 = smooth)', min: 1, max: 6, step: 1, def: 3, unit: '×' },
+    { group: 'Ticket', key: 'ticketScale', label: 'Ticket size', min: 0.7, max: 1.6, step: 0.01, def: 1.15, unit: '×' },
+    { key: 'ticketMs', label: 'Ticket duration', min: 800, max: 5000, step: 100, def: 2200, unit: 'ms' },
+    { key: 'darkGate', label: 'Dark backdrop', type: 'bool', def: false },
+    { key: 'holdTicket', label: 'Hold ticket on screen (compare sizes)', type: 'bool', def: false },
+    { group: 'Shot', key: 'trigger', label: 'Shot happens after scrolling', min: 0, max: 600, step: 5, def: 140, unit: 'px' },
+    { key: 'windup', label: 'Wind-up length', min: 0, max: 300, step: 5, def: 90, unit: 'px' },
+    { key: 'gap', label: 'Air gap before sections', min: 0, max: 900, step: 10, def: 300, unit: 'px' },
+    { key: 'arc', label: 'Arc height', min: 0, max: 450, step: 5, def: 170, unit: 'px' },
+    { key: 'bump', label: 'Ball grows mid-air by', min: 0, max: 24, step: 1, def: 8, unit: 'px' },
+    { group: 'Rail', key: 'anchor', label: 'Dot rides at', min: 15, max: 75, step: 1, def: 45, unit: '% down' },
+    { key: 'railOffset', label: 'Rail distance from text', min: 16, max: 120, step: 2, def: 56, unit: 'px' },
+    { key: 'dot', label: 'Dot size', min: 6, max: 20, step: 1, def: 10, unit: 'px' },
+    { group: 'Finish', key: 'hoopCenter', label: 'Hoop centered (off = under the rail)', type: 'bool', def: true },
+    { key: 'dropArc', label: 'Drop arc height', min: 0, max: 240, step: 5, def: 90, unit: 'px' },
+    { group: 'Debug', key: 'players', label: 'Players running', type: 'bool', def: true },
+    { key: 'debug', label: 'Show guides + readout', type: 'bool', def: true },
+  ];
+  const STORE = 'court-greybox:v1';
+  const DEFAULTS = Object.fromEntries(DEFS.map((d) => [d.key, d.def]));
+  const cfg = { ...DEFAULTS };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
+    for (const d of DEFS) if (typeof saved[d.key] === typeof d.def) cfg[d.key] = saved[d.key];
+  } catch { /* storage unavailable: use defaults */ }
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch { /* ignore */ } };
+
+  // ---------- elements ----------
+  const courtFrame = $('courtFrame');
+  const timeline = $('timeline');
+  const nodeEls = [...timeline.querySelectorAll('[data-node]')];
+  const dropAir = $('dropAir');
+  const hoopSlot = $('hoopSlot');
+  const tailPad = $('tailPad');
+  const overlay = $('overlay');
+  const octx = overlay.getContext('2d');
+  const hud = $('hud');
+  const gate = $('gate');
+  const ticket = $('ticket');
+
+  // ---------- layout cache ----------
+  const L = { nodes: [] };
+  let dirty = true;
+  const DROP_MIN = 260; // minimum scroll distance for the final drop
+
+  const railDotY = (s) => clamp(L.anchorY, L.railTop - s, L.railBot - s);
+
+  function hoopGeom(cx, top) {
+    const bb = { x: cx - 50, y: top + 8, w: 100, h: 66 };
+    const rimY = bb.y + bb.h - 4;
+    return { cx, bb, rimY, rx: 27, ry: 6.5, netH: 44, ballR: 14, floorY: rimY + 44 + 34 };
+  }
+
+  function measure() {
+    const sy = scrollY;
+    const vh = innerHeight;
+    const cr = courtFrame.getBoundingClientRect();
+    L.court = { x: cr.left, y: cr.top + sy, w: cr.width, h: cr.height };
+    const tl = timeline.getBoundingClientRect();
+    const padL = parseFloat(getComputedStyle(timeline).paddingLeft) || 0;
+    L.railX = padL > 0 ? tl.left + 11 : Math.max(12, tl.left - cfg.railOffset);
+    L.nodes = nodeEls.map((el) => { const r = el.getBoundingClientRect(); return r.top + sy + r.height / 2; });
+    L.railTop = L.nodes[0];
+    L.railBot = L.nodes[L.nodes.length - 1];
+    L.vh = vh;
+    L.anchorY = vh * cfg.anchor / 100;
+    const hs = hoopSlot.getBoundingClientRect();
+    L.hoop = hoopGeom(cfg.hoopCenter ? hs.left + hs.width / 2 : L.railX, hs.top + sy);
+    L.shotStart = cfg.trigger;
+    L.windStart = cfg.trigger - cfg.windup;
+    L.shotEnd = Math.max(L.railTop - L.anchorY, L.shotStart + 40);
+    L.dropStart = L.railBot - L.anchorY;
+    L.finishY = vh * 0.66;                 // where the rim sits on screen when the ball goes in
+    L.dropEnd = L.hoop.rimY - L.finishY;
+    L.maxScroll = html.scrollHeight - vh;
+    L.release = court.releasePoint(L.court.w, L.court.h);
+    L.S = { x: L.court.x + L.release.x, y: L.court.y + L.release.y - L.shotStart };
+    L.R = { x: L.railX, y: railDotY(L.shotEnd) };
+  }
+
+  // Size the two spacers so the drop always has room and the page can scroll far enough.
+  function fitSpacers() {
+    const airNow = dropAir.offsetHeight;
+    const padNow = tailPad.offsetHeight;
+    const d0 = (L.hoop.rimY - L.railBot) - airNow;
+    const air = Math.max(60, Math.ceil(DROP_MIN + L.finishY - L.anchorY - d0));
+    const tail0 = (html.scrollHeight - L.hoop.rimY) - padNow;
+    const pad = Math.max(24, Math.ceil(L.vh - L.finishY - tail0 + 4));
+    if (Math.abs(air - airNow) > 1 || Math.abs(pad - padNow) > 1) {
+      dropAir.style.height = air + 'px';
+      tailPad.style.height = pad + 'px';
+      return true;
+    }
+    return false;
+  }
+
+  function relayout() {
+    measure();
+    if (fitSpacers()) measure();
+    dirty = false;
+  }
+
+  // ---------- the ball, as a pure function of scroll ----------
+  function ballAt(s) {
+    if (s < L.shotStart) return null; // still in the shooter's hands (drawn by the court)
+    const dotR = cfg.dot / 2;
+    if (s < L.shotEnd) {
+      const p = (s - L.shotStart) / (L.shotEnd - L.shotStart);
+      return {
+        phase: 'flight', p,
+        x: lerp(L.S.x, L.R.x, p),
+        y: lerp(L.S.y, L.R.y, p) - 4 * cfg.arc * p * (1 - p),
+        r: lerp(L.release.r, dotR, p) + (cfg.bump / 2) * Math.sin(Math.PI * p),
+      };
+    }
+    if (s < L.dropStart) {
+      return { phase: 'rail', p: (s - L.shotEnd) / Math.max(1, L.dropStart - L.shotEnd), x: L.railX, y: railDotY(s), r: dotR };
+    }
+    const h = L.hoop;
+    const q = clamp((s - L.dropStart) / Math.max(1, L.dropEnd - L.dropStart), 0, 1);
+    const entry = { x: h.cx, y: h.rimY - h.ballR * 0.5 };
+    let x, y, r, swish = 0;
+    if (q < 0.75) {
+      const u = q / 0.75;
+      x = lerp(L.railX, entry.x, u);
+      y = lerp(L.railBot, entry.y, u) - 4 * cfg.dropArc * u * (1 - u);
+      r = lerp(dotR, h.ballR, smooth(0, 0.55, u));
+    } else {
+      const u = (q - 0.75) / 0.25;
+      x = entry.x;
+      y = lerp(entry.y, h.floorY - h.ballR, easeIn(u));
+      r = h.ballR;
+      swish = Math.sin(Math.PI * clamp(u * 1.6, 0, 1));
+    }
+    return { phase: 'drop', p: q, x, y: y - s, r, swish };
+  }
+
+  // ---------- court ----------
+  const court = (() => {
+    const canvas = $('court');
+    const ctx = canvas.getContext('2d');
+    const off = document.createElement('canvas');
+    const g = off.getContext('2d');
+    let W = 1, H = 1;
+
+    // Court coordinates in feet: x 0 (baseline, hoop side, left) → 47 (half-court line); z 0 (far sideline) → 50 (near).
+    const P = (x, z, h = 0) => {
+      const t = z / 50;
+      const y0 = H * (0.36 + 0.61 * t);
+      const w = W * (0.70 + 0.32 * t);
+      const s = w / 47;
+      const sh = s * Math.min(1, 1.5 * H / W);
+      return { x: W / 2 + (x / 47 - 0.5) * w, y: y0 - h * sh, s, sh };
+    };
+
+    function mover(path, speed, pause, phase) {
+      const segs = [];
+      let total = 0;
+      path.forEach((a, i) => {
+        const b = path[(i + 1) % path.length];
+        const move = Math.hypot(b[0] - a[0], b[1] - a[1]) / speed;
+        segs.push({ a, b, move, dur: move + pause });
+        total += move + pause;
+      });
+      return { segs, total, phase };
+    }
+    function moverPos(m, t) {
+      let u = (t + m.phase) % m.total;
+      for (const sg of m.segs) {
+        if (u <= sg.dur) {
+          const k = smooth(0, sg.move, u);
+          return { x: lerp(sg.a[0], sg.b[0], k), z: lerp(sg.a[1], sg.b[1], k), moving: u < sg.move };
+        }
+        u -= sg.dur;
+      }
+      return { x: m.segs[0].a[0], z: m.segs[0].a[1], moving: false };
+    }
+
+    const YOU = { x: 25, z: 36 };
+    const HOOP = { x: 5.25, z: 25 };
+    const offense = [
+      mover([[31, 20], [36, 14], [30, 26], [34, 30]], 7, 0.35, 0.0),
+      mover([[3, 46], [10, 44], [15, 48], [6, 41]], 6.5, 0.3, 1.3),
+      mover([[9, 17], [13, 21], [10, 30], [12, 33]], 5.5, 0.4, 2.1),
+    ];
+    const defenders = [
+      { guard: -1, x: 22, z: 34 },
+      { guard: 0, x: 28, z: 21 },
+      { guard: 1, x: 5, z: 43 },
+      { guard: 2, x: 8, z: 21 },
+    ];
+
+    function releasePoint(w, h) {
+      W = w; H = h;
+      const p = P(YOU.x - 0.4, YOU.z, 10.2);
+      return { x: p.x, y: p.y, r: Math.max(2.5, 0.42 * p.s) };
+    }
+
+    function line(pts) {
+      g.beginPath();
+      pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+    }
+    function arcPts(cx, cz, r, a0, a1, h = 0, n = 28) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const a = lerp(a0, a1, i / n);
+        pts.push(P(cx + r * Math.cos(a), cz + r * Math.sin(a), h));
+      }
+      return pts;
+    }
+    const quad = (x0, z0, x1, z1) => [P(x0, z0), P(x1, z0), P(x1, z1), P(x0, z1)];
+
+    function drawFloor() {
+      g.fillStyle = '#ececec';
+      g.fillRect(0, 0, W, H);
+      // stands
+      const top = H * 0.36;
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = i % 2 ? '#e7e7e7' : '#e2e2e2';
+        g.fillRect(0, top * (0.18 + i * 0.2), W, top * 0.1);
+      }
+      // apron + court
+      line(quad(-6, -3, 53, 54)); g.closePath(); g.fillStyle = '#ddd6cb'; g.fill();
+      line(quad(0, 0, 47, 50)); g.closePath(); g.fillStyle = '#ebe4d8'; g.fill();
+      line(quad(0, 17, 19, 33)); g.closePath(); g.fillStyle = '#e3d5c2'; g.fill();
+
+      g.strokeStyle = '#b8ad9d';
+      g.lineWidth = 1.2;
+      line(quad(0, 0, 47, 50)); g.closePath(); g.stroke();
+      line(quad(0, 17, 19, 33)); g.closePath(); g.stroke();
+      line(arcPts(19, 25, 6, 0, Math.PI * 2)); g.stroke();
+      line(arcPts(47, 25, 6, Math.PI / 2, Math.PI * 1.5)); g.stroke();
+      const a0 = Math.asin(22 / 23.75);
+      line(arcPts(HOOP.x, HOOP.z, 23.75, -a0, a0, 0, 40)); g.stroke();
+      line([P(0, 3), P(14.2, 3)]); g.stroke();
+      line([P(0, 47), P(14.2, 47)]); g.stroke();
+    }
+
+    function drawHoop() {
+      // stanchion
+      g.strokeStyle = '#9d9d9d';
+      g.lineWidth = Math.max(2, P(-4, 25).s * 0.5);
+      line([P(-4, 25, 0), P(-4, 25, 11), P(3.6, 25, 11)]); g.stroke();
+      // backboard
+      line([P(4, 22, 9), P(4, 28, 9), P(4, 28, 12.6), P(4, 22, 12.6)]); g.closePath();
+      g.fillStyle = 'rgba(255,255,255,.92)'; g.fill();
+      g.strokeStyle = '#8f8f8f'; g.lineWidth = 1.2; g.stroke();
+      // net
+      g.strokeStyle = '#c9c9c9'; g.lineWidth = 1;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        line([P(HOOP.x + 0.75 * Math.cos(a), HOOP.z + 0.75 * Math.sin(a), 10), P(HOOP.x + 0.45 * Math.cos(a), HOOP.z + 0.45 * Math.sin(a), 8.4)]);
+        g.stroke();
+      }
+      // rim
+      line(arcPts(HOOP.x, HOOP.z, 0.75, 0, Math.PI * 2, 10, 20)); g.closePath();
+      g.strokeStyle = ORANGE; g.lineWidth = 1.6; g.stroke();
+    }
+
+    function drawPlayer(pl) {
+      const f = P(pl.x, pl.z, 0);
+      const s = f.s, sh = f.sh;
+      const lift = (pl.lift || 0) * sh;
+      const bob = pl.moving ? Math.abs(Math.sin(pl.step)) * 0.35 * sh : 0;
+      const bodyH = 6.3 * sh * (1 - 0.14 * (pl.crouch || 0));
+      const bw = 1.9 * s;
+      // shadow
+      g.fillStyle = 'rgba(0,0,0,.13)';
+      g.beginPath();
+      g.ellipse(f.x, f.y, bw * 0.78 * (1 - 0.25 * (pl.lift || 0) / 2), bw * 0.24, 0, 0, Math.PI * 2);
+      g.fill();
+      const foot = f.y - lift - bob;
+      const legH = bodyH * 0.42, legW = bw * 0.32;
+      const swing = pl.moving ? Math.sin(pl.step * 2) * bw * 0.16 : 0;
+      g.fillStyle = pl.legs;
+      g.fillRect(f.x - bw * 0.38 + swing, foot - legH, legW, legH);
+      g.fillRect(f.x + bw * 0.06 - swing, foot - legH, legW, legH);
+      const torsoH = bodyH * 0.43;
+      const torsoY = foot - legH - torsoH;
+      g.fillStyle = pl.shirt;
+      g.beginPath();
+      g.roundRect(f.x - bw / 2, torsoY, bw, torsoH + 1, bw * 0.2);
+      g.fill();
+      const hr = 0.52 * sh;
+      g.fillStyle = '#8c8c8c';
+      g.beginPath();
+      g.arc(f.x, torsoY - hr * 0.95, hr, 0, Math.PI * 2);
+      g.fill();
+      if (pl.outline) {
+        g.strokeStyle = ORANGE; g.lineWidth = 1.4;
+        g.beginPath(); g.roundRect(f.x - bw / 2, torsoY, bw, torsoH + 1, bw * 0.2); g.stroke();
+      }
+      pl.shoulder = { x: f.x - bw * 0.2, y: torsoY + torsoH * 0.18 };
+      pl.headTop = { x: f.x, y: torsoY - hr * 2 };
+    }
+
+    function drawBall(b) {
+      const p = P(b.x, b.z, b.h);
+      const r = Math.max(2.5, 0.42 * p.s);
+      const fl = P(b.x, b.z, 0);
+      g.fillStyle = 'rgba(0,0,0,.12)';
+      g.beginPath(); g.ellipse(fl.x, fl.y, r * 1.1, r * 0.4, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = ORANGE;
+      g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2); g.fill();
+      return p;
+    }
+
+    function draw(t, scroll) {
+      const dpr = devicePixelRatio || 1;
+      W = L.court.w; H = L.court.h;
+      const cw = Math.round(W * dpr), ch = Math.round(H * dpr);
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      const k = cfg.pixel <= 1 ? dpr : 1 / cfg.pixel;
+      const ow = Math.max(1, Math.round(W * k)), oh = Math.max(1, Math.round(H * k));
+      if (off.width !== ow || off.height !== oh) { off.width = ow; off.height = oh; }
+      g.setTransform(ow / W, 0, 0, oh / H, 0, 0);
+
+      drawFloor();
+      drawHoop();
+
+      // shooter pose, driven by scroll
+      const w = cfg.windup > 0 ? clamp((scroll - L.windStart) / cfg.windup, 0, 1) : (scroll >= L.shotStart ? 1 : 0);
+      const shot = scroll >= L.shotStart;
+      const p = shot ? clamp((scroll - L.shotStart) / (L.shotEnd - L.shotStart), 0, 1) : 0;
+      let lift, crouch;
+      if (!shot) {
+        crouch = smooth(0, 0.45, w) * (1 - smooth(0.5, 0.7, w));
+        lift = 2.0 * easeOut(clamp((w - 0.55) / 0.45, 0, 1));
+      } else {
+        crouch = 0;
+        lift = 2.0 * (1 - easeIn(clamp(p / 0.18, 0, 1)));
+      }
+      const you = { x: YOU.x, z: YOU.z, shirt: '#3b3b3b', legs: '#2a2a2a', outline: true, lift, crouch, moving: false, step: 0, isYou: true };
+
+      // everyone else just runs
+      const off3 = offense.map((m, i) => {
+        const pos = moverPos(m, t);
+        return { ...pos, shirt: '#3b3b3b', legs: '#2a2a2a', step: t * 9 + i };
+      });
+      const dt = court.lastT === undefined ? 0 : Math.max(0, t - court.lastT);
+      court.lastT = t;
+      const def4 = defenders.map((d, i) => {
+        const tgt = d.guard < 0 ? YOU : off3[d.guard];
+        const dx = HOOP.x - tgt.x, dz = HOOP.z - tgt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const gap = d.guard < 0 ? 3.2 : 3;
+        const sway = d.guard < 0 ? Math.sin(t * 2.4) * 0.8 : 0;
+        const gx = tgt.x + (dx / len) * gap, gz = tgt.z + (dz / len) * gap + sway;
+        const a = Math.min(1, dt * 3.5);
+        const px = d.x, pz = d.z;
+        d.x += (gx - d.x) * a; d.z += (gz - d.z) * a;
+        const moving = Math.hypot(d.x - px, d.z - pz) > dt * 0.8;
+        return { x: d.x, z: d.z, shirt: '#cdcdcd', legs: '#a9a9a9', moving, step: t * 9 + i * 1.7 };
+      });
+
+      const people = [...off3, ...def4, you].sort((a, b) => a.z - b.z);
+      let youBall = null;
+      for (const pl of people) {
+        drawPlayer(pl);
+        if (pl.isYou && !shot) {
+          // dribble → ball overhead during the wind-up
+          const bounce = 2.9 * Math.abs(Math.sin(Math.PI * 1.7 * t));
+          const kk = smooth(0.15, 0.85, w);
+          youBall = {
+            x: lerp(YOU.x - 1.1, YOU.x - 0.4, kk),
+            z: lerp(YOU.z + 0.9, YOU.z, kk),
+            h: lerp(bounce, 8.2 + lift, kk),
+          };
+          const bp = drawBall(youBall);
+          if (kk > 0.25) {
+            g.strokeStyle = '#3b3b3b'; g.lineWidth = Math.max(1.5, P(YOU.x, YOU.z).s * 0.38);
+            g.beginPath(); g.moveTo(pl.shoulder.x, pl.shoulder.y); g.lineTo(bp.x, bp.y + 1); g.stroke();
+          }
+        } else if (pl.isYou && p < 0.35) {
+          // follow-through
+          const rp = P(YOU.x - 0.4, YOU.z, 10.2 - (2.0 - lift));
+          g.strokeStyle = '#3b3b3b'; g.lineWidth = Math.max(1.5, P(YOU.x, YOU.z).s * 0.38);
+          g.beginPath(); g.moveTo(pl.shoulder.x, pl.shoulder.y); g.lineTo(rp.x - 2, rp.y); g.stroke();
+        }
+      }
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = cfg.pixel <= 1;
+      ctx.clearRect(0, 0, cw, ch);
+      ctx.drawImage(off, 0, 0, cw, ch);
+
+      if (cfg.debug) {
+        const head = you.headTop;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.font = '600 10px ui-monospace, Consolas, monospace';
+        ctx.fillStyle = ORANGE;
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU', head.x, head.y - 6);
+      }
+    }
+
+    return { draw, releasePoint };
+  })();
+
+  // ---------- overlay: flight, rail, hoop ----------
+  function sizeOverlay() {
+    const dpr = devicePixelRatio || 1;
+    overlay.width = Math.round(innerWidth * dpr);
+    overlay.height = Math.round(innerHeight * dpr);
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawBallShape(g, x, y, r) {
+    g.fillStyle = ORANGE;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    if (r < 7) return;
+    g.save();
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip();
+    g.strokeStyle = 'rgba(60,25,5,.55)';
+    g.lineWidth = Math.max(1, r * 0.08);
+    g.beginPath();
+    g.moveTo(x, y - r); g.lineTo(x, y + r);
+    g.moveTo(x - r, y); g.lineTo(x + r, y);
+    g.moveTo(x - r * 0.62, y - r * 0.82); g.quadraticCurveTo(x - r * 0.18, y, x - r * 0.62, y + r * 0.82);
+    g.moveTo(x + r * 0.62, y - r * 0.82); g.quadraticCurveTo(x + r * 0.18, y, x + r * 0.62, y + r * 0.82);
+    g.stroke();
+    g.restore();
+  }
+
+  function drawHoopBack(g, h, s) {
+    const bb = h.bb;
+    g.fillStyle = '#ffffff';
+    g.strokeStyle = '#bdbdbd';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.roundRect(bb.x, bb.y - s, bb.w, bb.h, 4); g.fill(); g.stroke();
+    g.strokeStyle = '#d0d0d0';
+    g.strokeRect(h.cx - 18, bb.y - s + bb.h - 34, 36, 26);
+    g.strokeStyle = ORANGE;
+    g.lineWidth = 2;
+    g.beginPath(); g.ellipse(h.cx, h.rimY - s, h.rx, h.ry, 0, Math.PI, Math.PI * 2); g.stroke();
+    // floor line
+    g.strokeStyle = '#e1e1e1'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(h.cx - 90, h.floorY - s); g.lineTo(h.cx + 90, h.floorY - s); g.stroke();
+  }
+
+  function drawHoopFront(g, h, s, swish) {
+    const top = h.rimY - s;
+    const bulge = swish * 5;
+    g.strokeStyle = '#c4c4c4';
+    g.lineWidth = 1;
+    const n = 7;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      const xTop = h.cx - h.rx + u * h.rx * 2;
+      const xBot = h.cx - 16 + u * 32 + (u - 0.5) * bulge * 2;
+      const yTop = top + Math.sin(u * Math.PI) * h.ry;
+      g.beginPath(); g.moveTo(xTop, yTop); g.lineTo(xBot, top + h.netH + swish * 6); g.stroke();
+    }
+    for (let j = 1; j <= 3; j++) {
+      const v = j / 4;
+      const half = lerp(h.rx, 16 + bulge, v);
+      const yy = top + v * (h.netH + swish * 6);
+      g.beginPath(); g.moveTo(h.cx - half, yy); g.lineTo(h.cx + half, yy); g.stroke();
+    }
+    g.strokeStyle = ORANGE;
+    g.lineWidth = 2.4;
+    g.beginPath(); g.ellipse(h.cx, top, h.rx, h.ry, 0, 0, Math.PI); g.stroke();
+  }
+
+  let litCount = -1;
+  function drawOverlay(s, ball) {
+    const g = octx;
+    const vh = L.vh;
+    g.clearRect(0, 0, innerWidth, vh);
+
+    // rail
+    const top = L.railTop - s, bot = L.railBot - s;
+    let lit = 0;
+    if (bot > -30 && top < vh + 30) {
+      g.lineWidth = 1.5;
+      g.strokeStyle = '#dedede';
+      g.beginPath(); g.moveTo(L.railX, top); g.lineTo(L.railX, bot); g.stroke();
+      const fillTo = !ball ? top : ball.phase === 'rail' ? ball.y : ball.phase === 'drop' ? bot : top;
+      if (fillTo > top) {
+        g.strokeStyle = ORANGE;
+        g.beginPath(); g.moveTo(L.railX, top); g.lineTo(L.railX, fillTo); g.stroke();
+      }
+      L.nodes.forEach((ny) => {
+        const y = ny - s;
+        const on = ball && (ball.phase === 'drop' || (ball.phase === 'rail' && ball.y >= y - 0.5));
+        if (on) lit++;
+        g.beginPath(); g.arc(L.railX, y, 4.5, 0, Math.PI * 2);
+        g.fillStyle = on ? ORANGE : '#fbfbfb'; g.fill();
+        g.strokeStyle = on ? ORANGE : '#cfcfcf'; g.lineWidth = 1.5; g.stroke();
+      });
+    } else if (ball && ball.phase === 'drop') {
+      lit = L.nodes.length;
+    } else if (ball && ball.phase === 'rail') {
+      lit = L.nodes.filter((ny) => ball.y + s >= ny - 0.5).length;
+    }
+    if (lit !== litCount) {
+      nodeEls.forEach((el, i) => el.classList.toggle('lit', i < lit));
+      litCount = lit;
+    }
+
+    // hoop + ball
+    const h = L.hoop;
+    const hoopVisible = h.bb.y - s < vh + 20 && h.floorY - s > -20;
+    if (hoopVisible) drawHoopBack(g, h, s);
+    if (ball) {
+      if (ball.phase === 'rail') {
+        g.fillStyle = 'rgba(242,106,27,.16)';
+        g.beginPath(); g.arc(ball.x, ball.y, ball.r + 4, 0, Math.PI * 2); g.fill();
+      }
+      drawBallShape(g, ball.x, ball.y, ball.r);
+    }
+    if (hoopVisible) drawHoopFront(g, h, s, ball && ball.phase === 'drop' ? ball.swish : 0);
+
+    if (cfg.debug) drawGuides(g, s, ball);
+  }
+
+  function drawGuides(g, s, ball) {
+    g.save();
+    g.setLineDash([4, 5]);
+    g.strokeStyle = 'rgba(242,106,27,.35)';
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, L.anchorY); g.lineTo(innerWidth, L.anchorY); g.stroke();
+    g.setLineDash([]);
+    g.font = '10px ui-monospace, Consolas, monospace';
+    g.fillStyle = 'rgba(194,65,12,.7)';
+    g.textAlign = 'right';
+    g.fillText(`dot line · ${cfg.anchor}%`, innerWidth - 10, L.anchorY - 5);
+
+    // flight path preview (screen-space, so it stays put while scrolling)
+    if (s >= L.shotStart && s < L.shotEnd + 40) {
+      g.fillStyle = 'rgba(0,0,0,.2)';
+      for (let i = 0; i <= 40; i++) {
+        const p = i / 40;
+        const x = lerp(L.S.x, L.R.x, p);
+        const y = lerp(L.S.y, L.R.y, p) - 4 * cfg.arc * p * (1 - p);
+        g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI * 2); g.fill();
+      }
+    }
+    // drop path preview (page-space)
+    const h = L.hoop;
+    if (h.bb.y - s < L.vh && L.railBot - s > -200) {
+      g.fillStyle = 'rgba(0,0,0,.2)';
+      for (let i = 0; i <= 30; i++) {
+        const u = i / 30;
+        const x = lerp(L.railX, h.cx, u);
+        const y = lerp(L.railBot, h.rimY - h.ballR * 0.5, u) - 4 * cfg.dropArc * u * (1 - u) - s;
+        g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.restore();
+  }
+
+  let hudText = '';
+  function updateHud(s, ball) {
+    if (!cfg.debug) return;
+    let phase;
+    if (!ball) phase = s < L.windStart ? 'dribbling' : `wind-up ${Math.round(clamp((s - L.windStart) / Math.max(1, cfg.windup), 0, 1) * 100)}%`;
+    else if (ball.phase === 'flight') phase = `ball in the air ${Math.round(ball.p * 100)}%`;
+    else if (ball.phase === 'rail') phase = `on the rail · section ${Math.max(1, L.nodes.filter((ny) => ball.y + s >= ny - 0.5).length)}/${L.nodes.length}`;
+    else phase = ball.p >= 1 ? 'swish ✓' : `dropping into the hoop ${Math.round(ball.p * 100)}%`;
+    const lines = [
+      `scroll ${Math.round(s)}px · ${phase}`,
+      `shot ${Math.round(L.shotStart)}→${Math.round(L.shotEnd)}px · drop ${Math.round(L.dropStart)}→${Math.round(L.dropEnd)}px`,
+      `court ${Math.round(L.court.w)}×${Math.round(L.court.h)} · column ${Math.round(timeline.getBoundingClientRect().width)}px`,
+    ];
+    const warn = [];
+    if (L.railTop - L.anchorY < L.shotStart + 120) warn.push('Air gap is short: the ball reaches the rail almost right away.');
+    if (L.windStart < 0) warn.push('Wind-up starts before any scrolling.');
+    const text = lines.join('\n') + (warn.length ? '\n' + warn.map((w) => '⚠ ' + w).join('\n') : '');
+    if (text !== hudText) {
+      hudText = text;
+      hud.textContent = lines.join('\n');
+      warn.forEach((w) => { const d = document.createElement('div'); d.className = 'warn'; d.textContent = '⚠ ' + w; hud.append(d); });
+    }
+  }
+
+  // ---------- ticket ----------
+  const tFill = $('tFill'), tPct = $('tPct'), tStamp = $('tStamp');
+  (function buildBarcode() {
+    const el = $('tBarcode');
+    let seed = 23;
+    const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 56; i++) {
+      const b = document.createElement('b');
+      b.style.width = (0.12 + rnd() * 0.32).toFixed(2) + 'em';
+      b.style.marginRight = (0.1 + rnd() * 0.22).toFixed(2) + 'em';
+      el.append(b);
+    }
+  })();
+
+  function stampDate() {
+    const now = new Date();
+    const mon = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    $('tDate').textContent = `${now.getDate()} ${mon} ${now.getFullYear()}`;
+    $('tTime').textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toUpperCase();
+  }
+
+  function fitTicket() {
+    html.style.setProperty('--ticket-fit', 1);
+    const h = ticket.offsetHeight;
+    const max = innerHeight * 0.9;
+    html.style.setProperty('--ticket-fit', h > max ? (max / h).toFixed(3) : 1);
+  }
+
+  let ticketRaf = 0;
+  let gateTimer = 0;
+  function resetTicket() {
+    cancelAnimationFrame(ticketRaf);
+    clearTimeout(gateTimer);
+    ticket.classList.remove('in', 'torn');
+    tStamp.classList.remove('on');
+    tFill.style.width = '0%';
+    tPct.textContent = '0%';
+  }
+
+  function runTicket() {
+    resetTicket();
+    stampDate();
+    gate.classList.remove('out', 'gone', 'hold');
+    if (reduceMotion) { finishTicket(); return; }
+    html.classList.add('locked');
+    fitTicket();
+    requestAnimationFrame(() => ticket.classList.add('in'));
+    const D = cfg.ticketMs;
+    const t0 = performance.now();
+    let stamped = false, torn = false;
+    const tick = (now) => {
+      const t = (now - t0) / D;
+      const load = smooth(0.1, 0.72, t);
+      tFill.style.width = (load * 100).toFixed(1) + '%';
+      tPct.textContent = Math.round(load * 100) + '%';
+      if (t >= 0.76 && !stamped) { stamped = true; tStamp.classList.add('on'); }
+      if (t >= 0.86 && !torn) { torn = true; ticket.classList.add('torn'); }
+      if (t >= 1) { finishTicket(); return; }
+      ticketRaf = requestAnimationFrame(tick);
+    };
+    ticketRaf = requestAnimationFrame(tick);
+  }
+
+  function finishTicket() {
+    cancelAnimationFrame(ticketRaf);
+    html.classList.remove('locked');
+    gate.classList.add('out');
+    gateTimer = setTimeout(() => gate.classList.add('gone'), 480);
+  }
+
+  function setHold(on) {
+    if (on) {
+      resetTicket();
+      stampDate();
+      html.classList.remove('locked');
+      gate.classList.remove('out', 'gone');
+      gate.classList.add('hold');
+      fitTicket();
+      ticket.classList.add('in');
+      tFill.style.width = '64%';
+      tPct.textContent = '64%';
+    } else if (gate.classList.contains('hold')) {
+      gate.classList.remove('hold');
+      gate.classList.add('out', 'gone');
+      resetTicket();
+    }
+  }
+
+  $('skip').addEventListener('click', finishTicket);
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !gate.classList.contains('gone') && !gate.classList.contains('hold')) finishTicket();
+  });
+
+  // ---------- apply + panel ----------
+  function apply() {
+    const st = html.style;
+    st.setProperty('--col-w', cfg.colW + 'px');
+    st.setProperty('--court-w', cfg.courtW + 'px');
+    st.setProperty('--court-ar', `${cfg.courtW} / ${cfg.courtH}`);
+    st.setProperty('--gap-h', cfg.gap + 'px');
+    st.setProperty('--ticket-scale', cfg.ticketScale);
+    document.body.classList.toggle('debug', cfg.debug);
+    gate.classList.toggle('dark', cfg.darkGate);
+    if (!cfg.holdTicket) setHold(false);
+    else if (!gate.classList.contains('hold')) setHold(true);
+    else fitTicket();
+    dirty = true;
+  }
+
+  const fmt = (d, v) => (d.step < 1 ? Number(v).toFixed(2) : v) + (d.unit ? ' ' + d.unit : '');
+  const panel = $('panel');
+  const pBody = $('pBody');
+  for (const d of DEFS) {
+    if (d.group) {
+      const h = document.createElement('div');
+      h.className = 'p-group';
+      h.textContent = d.group;
+      pBody.append(h);
+    }
+    const row = document.createElement('label');
+    row.className = 'p-row';
+    const name = document.createElement('span');
+    name.textContent = d.label;
+    row.append(name);
+    const inp = document.createElement('input');
+    if (d.type === 'bool') {
+      inp.type = 'checkbox';
+      inp.addEventListener('change', () => { cfg[d.key] = inp.checked; apply(); save(); });
+      row.append(inp);
+    } else {
+      const out = document.createElement('output');
+      inp.type = 'range';
+      inp.min = d.min; inp.max = d.max; inp.step = d.step;
+      inp.addEventListener('input', () => { cfg[d.key] = +inp.value; out.textContent = fmt(d, cfg[d.key]); apply(); save(); });
+      row.append(out, inp);
+      d.out = out;
+    }
+    d.input = inp;
+    pBody.append(row);
+  }
+  function syncPanel() {
+    for (const d of DEFS) {
+      if (d.type === 'bool') d.input.checked = cfg[d.key];
+      else { d.input.value = cfg[d.key]; d.out.textContent = fmt(d, cfg[d.key]); }
+    }
+  }
+
+  const PANEL_STORE = 'court-greybox:panel';
+  const setCollapsed = (c) => {
+    panel.classList.toggle('collapsed', c);
+    $('pToggle').textContent = c ? 'Show' : 'Hide';
+    try { localStorage.setItem(PANEL_STORE, c ? '1' : '0'); } catch { /* ignore */ }
+  };
+  let collapsed = innerWidth < 560;
+  try { const v = localStorage.getItem(PANEL_STORE); if (v !== null) collapsed = v === '1'; } catch { /* ignore */ }
+  setCollapsed(collapsed);
+  $('pToggle').addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
+
+  $('pReplay').addEventListener('click', () => {
+    if (cfg.holdTicket) { cfg.holdTicket = false; syncPanel(); apply(); save(); }
+    scrollTo({ top: 0, behavior: 'instant' });
+    runTicket();
+  });
+  $('pReset').addEventListener('click', () => { Object.assign(cfg, DEFAULTS); syncPanel(); apply(); save(); });
+  $('pCopy').addEventListener('click', async () => {
+    const text = JSON.stringify(cfg, null, 2);
+    const btn = $('pCopy');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = $('pCopyArea');
+      ta.value = text; ta.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+    }
+    btn.textContent = 'Copied ✓';
+    setTimeout(() => { btn.textContent = 'Copy values'; }, 1400);
+  });
+
+  // ---------- loop ----------
+  addEventListener('resize', () => { sizeOverlay(); dirty = true; });
+  new ResizeObserver(() => { dirty = true; }).observe(document.querySelector('main'));
+
+  let last = performance.now();
+  let simT = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (cfg.players && !reduceMotion) simT += dt;
+    if (dirty) relayout();
+    const s = scrollY;
+    court.draw(simT, s);
+    const ball = ballAt(s);
+    drawOverlay(s, ball);
+    updateHud(s, ball);
+    requestAnimationFrame(frame);
+  }
+
+  syncPanel();
+  apply();
+  sizeOverlay();
+  if (!cfg.holdTicket) runTicket();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

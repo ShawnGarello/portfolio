@@ -12,6 +12,12 @@ A minimal one-column site with a basketball story running through it:
 4. **The rail.** The ball becomes an orange dot that travels down the rail, lighting a node for each section.
 5. **The finish.** At the bottom of the page, the dot becomes the ball again and drops through a hoop beside the contact links.
 
+## Status
+
+Greybox prototype: plain shapes for testing composition, sizing and scroll timing. It has no final art or content yet, and no framework.
+
+Open `prototype/greybox.html` in a browser. The **Tune** panel adjusts sizes and timing live and remembers your settings in that browser. **Copy values** exports the current settings as JSON.
+
 ## License
 
 Not chosen yet.
