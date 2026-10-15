@@ -16,7 +16,7 @@ A minimal one-column site with a basketball story running through it:
 
 Greybox prototype: plain shapes for testing composition, sizing and scroll timing. It has no final art or content yet, and no framework.
 
-Open `prototype/greybox.html` in a browser. The **Tune** panel adjusts sizes and timing live and remembers your settings in that browser. **Copy values** exports the current settings as JSON.
+Try it live at **https://shawngarello.github.io/portfolio/**, or open `prototype/greybox.html` in a browser. The **Tune** panel adjusts sizes and timing live and remembers your settings in that browser. **Copy values** exports the current settings as JSON.
 
 ## License
 
